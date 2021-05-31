@@ -103,6 +103,7 @@ import java.util.function.UnaryOperator;
  * @since   1.2
  */
 
+// 可高效的进行随机访问（按索引访问）的列表结构
 public class ArrayList<E> extends AbstractList<E>
         implements List<E>, RandomAccess, Cloneable, java.io.Serializable
 {
@@ -111,6 +112,7 @@ public class ArrayList<E> extends AbstractList<E>
     /**
      * Default initial capacity.
      */
+    // 默认构造的容器，默认容量为10
     private static final int DEFAULT_CAPACITY = 10;
 
     /**
@@ -131,6 +133,7 @@ public class ArrayList<E> extends AbstractList<E>
      * empty ArrayList with elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA
      * will be expanded to DEFAULT_CAPACITY when the first element is added.
      */
+    // 比如 Object[] 可以存放任何对象，因为他是所有类的基类。注：数组也是对象
     transient Object[] elementData; // non-private to simplify nested class access
 
     /**
@@ -149,8 +152,11 @@ public class ArrayList<E> extends AbstractList<E>
      */
     public ArrayList(int initialCapacity) {
         if (initialCapacity > 0) {
+            // 申请指定容量的内存，全部元素被初始化为null
             this.elementData = new Object[initialCapacity];
         } else if (initialCapacity == 0) {
+            // 全局的空元素的数组。与 DEFAULTCAPACITY_EMPTY_ELEMENTDATA 区分开，是因为此处是用户手动指定了容量为0
+            // 区分开两者，主要是为了处理 DEFAULT_CAPACITY 默认容量。即：如果用户手动指定容量为0，则 DEFAULT_CAPACITY 将不再有效
             this.elementData = EMPTY_ELEMENTDATA;
         } else {
             throw new IllegalArgumentException("Illegal Capacity: "+
@@ -162,6 +168,8 @@ public class ArrayList<E> extends AbstractList<E>
      * Constructs an empty list with an initial capacity of ten.
      */
     public ArrayList() {
+        // 全局的空元素的数组。与 EMPTY_ELEMENTDATA 区分开，是因为此处是用户并未手动指定了容量
+        // 区分开两者，主要是为了处理 DEFAULT_CAPACITY 默认容量。即：如果用户手动指定容量为0，则 DEFAULT_CAPACITY 将不再有效
         this.elementData = DEFAULTCAPACITY_EMPTY_ELEMENTDATA;
     }
 
@@ -174,11 +182,13 @@ public class ArrayList<E> extends AbstractList<E>
      * @throws NullPointerException if the specified collection is null
      */
     public ArrayList(Collection<? extends E> c) {
+        // 获取容器c中所有元素，类型通常为Object[].class
+        // 注：Arrays.asList()创建的列表，其c.toArray()返回的不是 Object[] 数组，而是 T[] 数组
         elementData = c.toArray();
         if ((size = elementData.length) != 0) {
             // c.toArray might (incorrectly) not return Object[] (see 6260652)
             if (elementData.getClass() != Object[].class)
-                elementData = Arrays.copyOf(elementData, size, Object[].class);
+                elementData = Arrays.copyOf(elementData, size, Object[].class); // 将 T[] 类型的数组转换成 Object[]
         } else {
             // replace with empty array.
             this.elementData = EMPTY_ELEMENTDATA;
@@ -191,7 +201,10 @@ public class ArrayList<E> extends AbstractList<E>
      * the storage of an <tt>ArrayList</tt> instance.
      */
     public void trimToSize() {
+        // 缩容时，需设置容器结构有变化的标志位
         modCount++;
+        // 当实际元素个数小于容量时，释放多余的内存
+        // 注：返回的是重新申请的一块内存，他的数据拷贝自原始的数组数据（底层使用System.arraycopy进行按字节拷贝）
         if (size < elementData.length) {
             elementData = (size == 0)
               ? EMPTY_ELEMENTDATA
@@ -206,7 +219,9 @@ public class ArrayList<E> extends AbstractList<E>
      *
      * @param   minCapacity   the desired minimum capacity
      */
+    // 系统在确保能容纳minCapacity个元素时，自行判断容量是否需要扩容
     public void ensureCapacity(int minCapacity) {
+        // 容器的最小容量值。DEFAULTCAPACITY_EMPTY_ELEMENTDATA 来标识容器是默认构造的，其最小容量为10
         int minExpand = (elementData != DEFAULTCAPACITY_EMPTY_ELEMENTDATA)
             // any size if not default element table
             ? 0
@@ -214,12 +229,16 @@ public class ArrayList<E> extends AbstractList<E>
             // supposed to be at default size.
             : DEFAULT_CAPACITY;
 
+        // 指定minCapacity个数大小超过最小容量值时，进一步判断容量是否需要扩容
         if (minCapacity > minExpand) {
             ensureExplicitCapacity(minCapacity);
         }
     }
 
+    // 系统在确保能容纳minCapacity个元素时，自行判断容量是否需要扩容
     private void ensureCapacityInternal(int minCapacity) {
+        // 默认构造的容器，默认容量为10（不能低于10）
+        // 相比ensureCapacity()公共的方法，minCapacity不可能为0
         if (elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA) {
             minCapacity = Math.max(DEFAULT_CAPACITY, minCapacity);
         }
@@ -227,10 +246,13 @@ public class ArrayList<E> extends AbstractList<E>
         ensureExplicitCapacity(minCapacity);
     }
 
+    // 系统在确保能容纳minCapacity个元素时，自行判断容量是否需要扩容
     private void ensureExplicitCapacity(int minCapacity) {
+        // 调整容量时（可能），需设置容器结构有变化的标志位
         modCount++;
 
         // overflow-conscious code
+        // 此处拷贝了溢出风险。即，除了真正的需要扩容场景中，当minCapacity为负数，两个整数之和溢出4字节，结果也将大于0
         if (minCapacity - elementData.length > 0)
             grow(minCapacity);
     }
@@ -252,18 +274,28 @@ public class ArrayList<E> extends AbstractList<E>
     private void grow(int minCapacity) {
         // overflow-conscious code
         int oldCapacity = elementData.length;
+
+        // 新的数组容量为老容量的1.5倍。考虑了溢出风险，即，当扩容到1.5的整数溢出，它将变成负数
         int newCapacity = oldCapacity + (oldCapacity >> 1);
+        // 新数组容量为手动设置的最小容量与1.5倍老容量中的较大值。考虑了溢出风险，即，当minCapacity为负数，两个整数之和溢出4字节，结果也将小于0
         if (newCapacity - minCapacity < 0)
             newCapacity = minCapacity;
+
+        // 新的数组容量超过MAX_ARRAY_SIZE大小。进入大容量扩容逻辑。当newCapacity为负数时，结果将会大于0
+        // 注：这里的 hugeCapacity() 也是考虑溢出风险的最终处理函数
         if (newCapacity - MAX_ARRAY_SIZE > 0)
             newCapacity = hugeCapacity(minCapacity);
         // minCapacity is usually close to size, so this is a win:
+        // 返回的是重新申请的一块内存，他的数据拷贝自原始的数组数据（底层使用System.arraycopy进行按字节拷贝）
         elementData = Arrays.copyOf(elementData, newCapacity);
     }
 
     private static int hugeCapacity(int minCapacity) {
+        // 如果minCapacity小于0，抛出溢出异常
         if (minCapacity < 0) // overflow
             throw new OutOfMemoryError();
+
+        // 数组容量最大不会超过Integer.MAX_VALUE
         return (minCapacity > MAX_ARRAY_SIZE) ?
             Integer.MAX_VALUE :
             MAX_ARRAY_SIZE;
@@ -307,12 +339,15 @@ public class ArrayList<E> extends AbstractList<E>
      * <tt>(o==null&nbsp;?&nbsp;get(i)==null&nbsp;:&nbsp;o.equals(get(i)))</tt>,
      * or -1 if there is no such index.
      */
+    // 正向查找对象o在列表中的索引值，查找失败返回-1
     public int indexOf(Object o) {
         if (o == null) {
+            // null值查找处理
             for (int i = 0; i < size; i++)
                 if (elementData[i]==null)
                     return i;
         } else {
+            // 对象相等查找。使用参数作为 equals() 的调用对象
             for (int i = 0; i < size; i++)
                 if (o.equals(elementData[i]))
                     return i;
@@ -327,12 +362,15 @@ public class ArrayList<E> extends AbstractList<E>
      * <tt>(o==null&nbsp;?&nbsp;get(i)==null&nbsp;:&nbsp;o.equals(get(i)))</tt>,
      * or -1 if there is no such index.
      */
+    // 反向查找对象o在列表中的索引值，查找失败返回-1
     public int lastIndexOf(Object o) {
         if (o == null) {
+            // null值查找处理
             for (int i = size-1; i >= 0; i--)
                 if (elementData[i]==null)
                     return i;
         } else {
+            // 对象相等查找。使用参数作为 equals() 的调用对象
             for (int i = size-1; i >= 0; i--)
                 if (o.equals(elementData[i]))
                     return i;
@@ -346,14 +384,18 @@ public class ArrayList<E> extends AbstractList<E>
      *
      * @return a clone of this <tt>ArrayList</tt> instance
      */
+    // 返回列表容器的一个副本。内部Object[]数组会被自动拷贝。即，新建后复制，是按字节拷贝原始元素
     public Object clone() {
         try {
             ArrayList<?> v = (ArrayList<?>) super.clone();
+            // 返回的是重新申请的一块内存，他的数据拷贝自原始的数组数据（底层使用System.arraycopy进行按字节拷贝）
+            // 注：对象类型拷贝中需要自行处理
             v.elementData = Arrays.copyOf(elementData, size);
             v.modCount = 0;
             return v;
         } catch (CloneNotSupportedException e) {
             // this shouldn't happen, since we are Cloneable
+            // 永远不能发生，因为我们实现了Cloneable接口
             throw new InternalError(e);
         }
     }
@@ -372,7 +414,9 @@ public class ArrayList<E> extends AbstractList<E>
      * @return an array containing all of the elements in this list in
      *         proper sequence
      */
+    // 将列表容器中的数据转换成数组返回，这个方法返回的是Object[]的数组类型
     public Object[] toArray() {
+        // 返回的是重新申请的一块内存，他的数据拷贝自原始的数组数据（底层使用System.arraycopy进行按字节拷贝）
         return Arrays.copyOf(elementData, size);
     }
 
@@ -400,12 +444,17 @@ public class ArrayList<E> extends AbstractList<E>
      *         this list
      * @throws NullPointerException if the specified array is null
      */
+    // 将列表容器中的数据转换成数组返回，这个方法返回的是T[]的数组类型。当数组 a 长度足够时，直接使用它
     @SuppressWarnings("unchecked")
     public <T> T[] toArray(T[] a) {
         if (a.length < size)
             // Make a new array of a's runtime type, but my contents:
+            // 返回的是重新申请的一块内存，他的数据拷贝自原始的数组数据（底层使用System.arraycopy进行按字节拷贝）
+            // 数组的类型使用泛型的实际类型
             return (T[]) Arrays.copyOf(elementData, size, a.getClass());
+        // 当数组 a 长度足够时，直接使用它，将原始的数组数据拷贝到 a 数组中返回
         System.arraycopy(elementData, 0, a, 0, size);
+        // 将多余的数组元素置为null
         if (a.length > size)
             a[size] = null;
         return a;
@@ -426,6 +475,7 @@ public class ArrayList<E> extends AbstractList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
     public E get(int index) {
+        // 访问越界判定
         rangeCheck(index);
 
         return elementData(index);
@@ -441,6 +491,7 @@ public class ArrayList<E> extends AbstractList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
     public E set(int index, E element) {
+        // 访问越界判定
         rangeCheck(index);
 
         E oldValue = elementData(index);
@@ -455,6 +506,7 @@ public class ArrayList<E> extends AbstractList<E>
      * @return <tt>true</tt> (as specified by {@link Collection#add})
      */
     public boolean add(E e) {
+        // 必要时，扩容内存
         ensureCapacityInternal(size + 1);  // Increments modCount!!
         elementData[size++] = e;
         return true;
@@ -469,10 +521,14 @@ public class ArrayList<E> extends AbstractList<E>
      * @param element element to be inserted
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
+    // 将element元素添加到容器的第index索引中
     public void add(int index, E element) {
+        // 添加逻辑中的访问越界判定。索引可以为最后一个元素值（超尾索引），也可以是0
         rangeCheckForAdd(index);
 
+        // 必要时，扩容内存
         ensureCapacityInternal(size + 1);  // Increments modCount!!
+        // 将包括index后的元素向后移动一个索引
         System.arraycopy(elementData, index, elementData, index + 1,
                          size - index);
         elementData[index] = element;
@@ -489,15 +545,19 @@ public class ArrayList<E> extends AbstractList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
     public E remove(int index) {
+        // 访问越界判定
         rangeCheck(index);
 
+        // 删除元素时，需设置容器结构有变化的标志位
         modCount++;
         E oldValue = elementData(index);
 
+        // 将不包括index后的元素向前移动一个索引
         int numMoved = size - index - 1;
         if (numMoved > 0)
             System.arraycopy(elementData, index+1, elementData, index,
                              numMoved);
+        // 清除最后一个元素，让GC自动清理
         elementData[--size] = null; // clear to let GC do its work
 
         return oldValue;
@@ -516,6 +576,7 @@ public class ArrayList<E> extends AbstractList<E>
      * @param o element to be removed from this list, if present
      * @return <tt>true</tt> if this list contained the specified element
      */
+    // 删除容器中第一个等于对象o的元素。元素不存在，返回false
     public boolean remove(Object o) {
         if (o == null) {
             for (int index = 0; index < size; index++)
@@ -537,8 +598,11 @@ public class ArrayList<E> extends AbstractList<E>
      * Private remove method that skips bounds checking and does not
      * return the value removed.
      */
+    // 快速删除指定索引元素。相比remove(int index)，少了越界检测和返回值
     private void fastRemove(int index) {
+        // 删除元素时，需设置容器结构有变化的标志位
         modCount++;
+        // 将不包括index后的元素向前移动一个索引
         int numMoved = size - index - 1;
         if (numMoved > 0)
             System.arraycopy(elementData, index+1, elementData, index,
@@ -550,10 +614,13 @@ public class ArrayList<E> extends AbstractList<E>
      * Removes all of the elements from this list.  The list will
      * be empty after this call returns.
      */
+    // 清除容器中所有元素
     public void clear() {
+        // 清除容器时，需设置容器结构有变化的标志位
         modCount++;
 
         // clear to let GC do its work
+        // 逐个将容器中的元素置为null，而不是简单的将size置0，主要为了GC
         for (int i = 0; i < size; i++)
             elementData[i] = null;
 
@@ -573,10 +640,14 @@ public class ArrayList<E> extends AbstractList<E>
      * @return <tt>true</tt> if this list changed as a result of the call
      * @throws NullPointerException if the specified collection is null
      */
+    // 将容器c中的所有元素拷贝到当前容器的尾部
+    // 注：在处理拷贝时，这个方法与ArrayList(Collection<? extends E> c)最大的不同是，拷贝构造中尽力想复用c.toArray()的返回值
     public boolean addAll(Collection<? extends E> c) {
+        // 返回容器c中所有元素的数组形式的数据
         Object[] a = c.toArray();
         int numNew = a.length;
         ensureCapacityInternal(size + numNew);  // Increments modCount
+        // 将容器c中的元素拷贝到当前容器的尾部
         System.arraycopy(a, 0, elementData, size, numNew);
         size += numNew;
         return numNew != 0;
@@ -598,12 +669,14 @@ public class ArrayList<E> extends AbstractList<E>
      * @throws NullPointerException if the specified collection is null
      */
     public boolean addAll(int index, Collection<? extends E> c) {
+        // 添加逻辑中的访问越界判定。索引可以为最后一个元素值（超尾索引），也可以是0
         rangeCheckForAdd(index);
 
         Object[] a = c.toArray();
         int numNew = a.length;
         ensureCapacityInternal(size + numNew);  // Increments modCount
 
+        // 将包括index后的元素向后移动numNew个索引
         int numMoved = size - index;
         if (numMoved > 0)
             System.arraycopy(elementData, index, elementData, index + numNew,
@@ -629,12 +702,15 @@ public class ArrayList<E> extends AbstractList<E>
      *          toIndex < fromIndex})
      */
     protected void removeRange(int fromIndex, int toIndex) {
+        // 删除元素时，需设置容器结构有变化的标志位
         modCount++;
+        // 将包括toIndex后的元素向前移动到fromIndex索引，即可覆盖[fromIndex,toIndex]之前的元素
         int numMoved = size - toIndex;
         System.arraycopy(elementData, toIndex, elementData, fromIndex,
                          numMoved);
 
         // clear to let GC do its work
+        // 逐个将容器尾部 toIndex-fromIndex 个元素置为null，而不是简单的将size置newSize，主要为了GC
         int newSize = size - (toIndex-fromIndex);
         for (int i = newSize; i < size; i++) {
             elementData[i] = null;
@@ -649,6 +725,7 @@ public class ArrayList<E> extends AbstractList<E>
      * which throws an ArrayIndexOutOfBoundsException if index is negative.
      */
     private void rangeCheck(int index) {
+        // 访问越界判定
         if (index >= size)
             throw new IndexOutOfBoundsException(outOfBoundsMsg(index));
     }
@@ -657,6 +734,7 @@ public class ArrayList<E> extends AbstractList<E>
      * A version of rangeCheck used by add and addAll.
      */
     private void rangeCheckForAdd(int index) {
+        // 添加逻辑中的访问越界判定。索引可以为最后一个元素值（超尾索引），也可以是0
         if (index > size || index < 0)
             throw new IndexOutOfBoundsException(outOfBoundsMsg(index));
     }
@@ -685,6 +763,7 @@ public class ArrayList<E> extends AbstractList<E>
      *         or if the specified collection is null
      * @see Collection#contains(Object)
      */
+    // 删除容器中所有与容器c中相等的元素
     public boolean removeAll(Collection<?> c) {
         Objects.requireNonNull(c);
         return batchRemove(c, false);
@@ -706,11 +785,14 @@ public class ArrayList<E> extends AbstractList<E>
      *         or if the specified collection is null
      * @see Collection#contains(Object)
      */
+    // 删除容器中除了与容器c中相等的元素
     public boolean retainAll(Collection<?> c) {
         Objects.requireNonNull(c);
         return batchRemove(c, true);
     }
 
+    // 当complement=false时，删除容器中所有与容器c中相等的元素
+    // 当complement=true时，删除容器中除了与容器c中相等的元素
     private boolean batchRemove(Collection<?> c, boolean complement) {
         final Object[] elementData = this.elementData;
         int r = 0, w = 0;
@@ -722,16 +804,19 @@ public class ArrayList<E> extends AbstractList<E>
         } finally {
             // Preserve behavioral compatibility with AbstractCollection,
             // even if c.contains() throws.
+            // 当c.contains()抛出异常，说明在迭代删除过程中出现了意外
             if (r != size) {
+                // 将未处理的元素附加到尾部
                 System.arraycopy(elementData, r,
                                  elementData, w,
                                  size - r);
                 w += size - r;
             }
-            if (w != size) {
+            if (w != size) {    // 有元素被删除
                 // clear to let GC do its work
                 for (int i = w; i < size; i++)
                     elementData[i] = null;
+                // 删除元素时，需设置容器结构有变化的标志位
                 modCount += size - w;
                 size = w;
                 modified = true;
@@ -748,6 +833,7 @@ public class ArrayList<E> extends AbstractList<E>
      *             instance is emitted (int), followed by all of its elements
      *             (each an <tt>Object</tt>) in the proper order.
      */
+    // 序列化容器中的所有状态
     private void writeObject(java.io.ObjectOutputStream s)
         throws java.io.IOException{
         // Write out element count, and any hidden stuff
@@ -762,6 +848,7 @@ public class ArrayList<E> extends AbstractList<E>
             s.writeObject(elementData[i]);
         }
 
+        // 序列化过程中，容器结构被修改会立即抛出异常。多发生与并发场景中
         if (modCount != expectedModCount) {
             throw new ConcurrentModificationException();
         }
@@ -771,6 +858,7 @@ public class ArrayList<E> extends AbstractList<E>
      * Reconstitute the <tt>ArrayList</tt> instance from a stream (that is,
      * deserialize it).
      */
+    // 反序列化容器中的所有状态
     private void readObject(java.io.ObjectInputStream s)
         throws java.io.IOException, ClassNotFoundException {
         elementData = EMPTY_ELEMENTDATA;
@@ -805,6 +893,7 @@ public class ArrayList<E> extends AbstractList<E>
      *
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
+    // 获取列表迭代器。迭代起始位置为原始容器的index索引
     public ListIterator<E> listIterator(int index) {
         if (index < 0 || index > size)
             throw new IndexOutOfBoundsException("Index: "+index);
@@ -819,6 +908,7 @@ public class ArrayList<E> extends AbstractList<E>
      *
      * @see #listIterator(int)
      */
+    // 获取列表迭代器。迭代起始位置为原始容器的首元素
     public ListIterator<E> listIterator() {
         return new ListItr(0);
     }
@@ -830,6 +920,7 @@ public class ArrayList<E> extends AbstractList<E>
      *
      * @return an iterator over the elements in this list in proper sequence
      */
+    // 获取通用的迭代器
     public Iterator<E> iterator() {
         return new Itr();
     }
@@ -837,9 +928,17 @@ public class ArrayList<E> extends AbstractList<E>
     /**
      * An optimized version of AbstractList.Itr
      */
+    // 通用迭代器类。它只包含 next(), hasNext(), remove(), forEachRemaining() 接口；它没有新增/更新接口
+    // 调用remove()前，需调用next()；调用next()前，强烈建议先调用hasNext()
+    // 注：迭代器的工作是辅助具体的容器进行索引的自动化管理，它不持有实际的数据
     private class Itr implements Iterator<E> {
+        // 当前迭代位置。即，调用next()方法返回的元素
         int cursor;       // index of next element to return
+        // 上一次迭代位置。即，调用remove()方法后，迭代器回退索引
         int lastRet = -1; // index of last element returned; -1 if no such
+
+        // 生成迭代器时，立即保存原始容器的修改次数。在使用迭代器过程中，原始容器不能再进行结构性修改
+        // 注：modCount属性字段非常重要，可以有效的防止迭代器失效问题
         int expectedModCount = modCount;
 
         public boolean hasNext() {
@@ -848,55 +947,78 @@ public class ArrayList<E> extends AbstractList<E>
 
         @SuppressWarnings("unchecked")
         public E next() {
+            // 在使用迭代器过程中，原始容器不能再进行结构性修改
             checkForComodification();
             int i = cursor;
+            // 迭代越界时，立即抛出异常。调用next()前，强烈建议先调用hasNext()
             if (i >= size)
                 throw new NoSuchElementException();
+
+            // 访问原始容器中的元素
             Object[] elementData = ArrayList.this.elementData;
+            // 迭代越界时，立即抛出异常。此处多发于并发场景中
             if (i >= elementData.length)
                 throw new ConcurrentModificationException();
+
+            // 设置下一次next()迭代位置
             cursor = i + 1;
+            // 设置上一次迭代位置，并返回本次迭代的元素
             return (E) elementData[lastRet = i];
         }
 
+        // 删除上一次迭代next()方法返回的那个元素
         public void remove() {
+            // 调用remove()前，需调用next()
             if (lastRet < 0)
                 throw new IllegalStateException();
+            // 在使用迭代器过程中，原始容器不能再进行结构性修改
             checkForComodification();
 
             try {
+                // 从原始容器中删除上一次迭代next()方法返回的那个元素
                 ArrayList.this.remove(lastRet);
+                // 迭代器回退到上一次迭代的索引
                 cursor = lastRet;
+                // 将上一次迭代索引置为无效
                 lastRet = -1;
+                // 重新设置结构性修改的次数
                 expectedModCount = modCount;
             } catch (IndexOutOfBoundsException ex) {
                 throw new ConcurrentModificationException();
             }
         }
 
+        // 从当前迭代索引，批量遍历消费剩余的元素
         @Override
         @SuppressWarnings("unchecked")
         public void forEachRemaining(Consumer<? super E> consumer) {
             Objects.requireNonNull(consumer);
             final int size = ArrayList.this.size;
             int i = cursor;
+            // 迭代索引不能超过容器总的元素个数
             if (i >= size) {
                 return;
             }
+            // 再次判定当前迭代索引不能超过原始容器中元素的个数。多发生于并发场景中
             final Object[] elementData = ArrayList.this.elementData;
             if (i >= elementData.length) {
                 throw new ConcurrentModificationException();
             }
+            // 从当前迭代位置，遍历消费容器剩余元素。注：在遍历过程中，原始容器不能再进行结构性修改
             while (i != size && modCount == expectedModCount) {
                 consumer.accept((E) elementData[i++]);
             }
             // update once at end of iteration to reduce heap write traffic
+            // 设置当前迭代索引，即上一次迭代索引
             cursor = i;
             lastRet = i - 1;
+
+            // 在使用迭代器过程中，原始容器不能再进行结构性修改
             checkForComodification();
         }
 
         final void checkForComodification() {
+            // 在使用迭代器过程中，原始容器不能再进行结构性修改
             if (modCount != expectedModCount)
                 throw new ConcurrentModificationException();
         }
@@ -905,6 +1027,10 @@ public class ArrayList<E> extends AbstractList<E>
     /**
      * An optimized version of AbstractList.ListItr
      */
+    // 列表迭代器。主要应用在与位置相关的容器上，比如 ArrayList, LinkedList, SubList
+    // 1. 提供增、删、改、查接口，如 set(E e), add(E e)；不管概念还是实现上，这两个接口都与位置相关
+    // 2. 相比Iterator接口，增加了前向迭代接口，如 hasPrevious(),previous(),previousIndex(),nextIndex()
+    // 注：迭代器的工作是辅助具体的容器进行索引的自动化管理，它不持有实际的数据
     private class ListItr extends Itr implements ListIterator<E> {
         ListItr(int index) {
             super();
@@ -992,11 +1118,13 @@ public class ArrayList<E> extends AbstractList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      * @throws IllegalArgumentException {@inheritDoc}
      */
+    // 获取当前容器的一个子列表视图，元素范围：[fromIndex, toIndex)。从使用上，toIndex相当于是一个超尾索引
     public List<E> subList(int fromIndex, int toIndex) {
         subListRangeCheck(fromIndex, toIndex, size);
         return new SubList(this, 0, fromIndex, toIndex);
     }
 
+    // 子列表视图范围检查。从使用上，toIndex相当于是一个超尾索引
     static void subListRangeCheck(int fromIndex, int toIndex, int size) {
         if (fromIndex < 0)
             throw new IndexOutOfBoundsException("fromIndex = " + fromIndex);
@@ -1007,10 +1135,16 @@ public class ArrayList<E> extends AbstractList<E>
                                                ") > toIndex(" + toIndex + ")");
     }
 
+    // 容器的子列表视图。它提供增、删、查接口
+    // 注：子列表主要是对外部提供访问原始容器部分元素的一个视图，它不持有实际的数据
     private class SubList extends AbstractList<E> implements RandomAccess {
+        // 当前子列表视图的直接父列表容器的引用。注：SubList可递归生成子列表视图
         private final AbstractList<E> parent;
+        // 当前子列表视图的首元素在直接父列表容器中的索引偏移
         private final int parentOffset;
+        // 当前子列表视图的首元素在原始容器中的索引偏移
         private final int offset;
+        // 当前子列表视图中元素个数
         int size;
 
         SubList(AbstractList<E> parent,
@@ -1018,13 +1152,17 @@ public class ArrayList<E> extends AbstractList<E>
             this.parent = parent;
             this.parentOffset = fromIndex;
             this.offset = offset + fromIndex;
+            // 视图的元素范围：[fromIndex, toIndex)，从使用上，toIndex相当于是一个超尾索引
             this.size = toIndex - fromIndex;
+            // 生成子列表视图时，立即保存原始容器的修改次数。在使用视图过程中，原始容器不能再进行结构性修改
+            // 注：modCount属性字段非常重要，可以有效的防止视图非法访问的问题
             this.modCount = ArrayList.this.modCount;
         }
 
         public E set(int index, E e) {
             rangeCheck(index);
             checkForComodification();
+            // 直接更新原始容器中指定索引的元素
             E oldValue = ArrayList.this.elementData(offset + index);
             ArrayList.this.elementData[offset + index] = e;
             return oldValue;
@@ -1033,6 +1171,7 @@ public class ArrayList<E> extends AbstractList<E>
         public E get(int index) {
             rangeCheck(index);
             checkForComodification();
+            // 直接返回原始容器中指定索引的元素
             return ArrayList.this.elementData(offset + index);
         }
 
@@ -1044,6 +1183,8 @@ public class ArrayList<E> extends AbstractList<E>
         public void add(int index, E e) {
             rangeCheckForAdd(index);
             checkForComodification();
+            // 调用父容器的新增接口，如果父容器是一个SubList类实例，将会有递归调用
+            // 注：此处不直接操作原始容器，主要是为了修改父容器的modCount与size字段
             parent.add(parentOffset + index, e);
             this.modCount = parent.modCount;
             this.size++;
@@ -1052,6 +1193,8 @@ public class ArrayList<E> extends AbstractList<E>
         public E remove(int index) {
             rangeCheck(index);
             checkForComodification();
+            // 调用父容器的删除接口，如果父容器是一个SubList类实例，将会有递归调用
+            // 注：此处不直接操作原始容器，主要是为了修改父容器的modCount与size字段
             E result = parent.remove(parentOffset + index);
             this.modCount = parent.modCount;
             this.size--;
@@ -1060,6 +1203,8 @@ public class ArrayList<E> extends AbstractList<E>
 
         protected void removeRange(int fromIndex, int toIndex) {
             checkForComodification();
+            // 调用父容器的范围删除接口，如果父容器是一个SubList类实例，将会有递归调用
+            // 注：此处不直接操作原始容器，主要是为了修改父容器的modCount与size字段
             parent.removeRange(parentOffset + fromIndex,
                                parentOffset + toIndex);
             this.modCount = parent.modCount;
@@ -1067,6 +1212,7 @@ public class ArrayList<E> extends AbstractList<E>
         }
 
         public boolean addAll(Collection<? extends E> c) {
+            // 在尾部附加c容器中的所有元素
             return addAll(this.size, c);
         }
 
@@ -1077,6 +1223,8 @@ public class ArrayList<E> extends AbstractList<E>
                 return false;
 
             checkForComodification();
+            // 调用父容器的批量添加接口，如果父容器是一个SubList类实例，将会有递归调用
+            // 注：此处不直接操作原始容器，主要是为了修改父容器的modCount与size字段
             parent.addAll(parentOffset + index, c);
             this.modCount = parent.modCount;
             this.size += cSize;
@@ -1087,11 +1235,13 @@ public class ArrayList<E> extends AbstractList<E>
             return listIterator();
         }
 
+        // 返回列表迭代器实例（SubList内部类），起始偏移为index
         public ListIterator<E> listIterator(final int index) {
             checkForComodification();
             rangeCheckForAdd(index);
             final int offset = this.offset;
 
+            // 创建并返回列表迭代的内部类对象实例
             return new ListIterator<E>() {
                 int cursor = index;
                 int lastRet = -1;
@@ -1107,6 +1257,7 @@ public class ArrayList<E> extends AbstractList<E>
                     int i = cursor;
                     if (i >= SubList.this.size)
                         throw new NoSuchElementException();
+                    // 直接返回原始容器中指定索引的元素
                     Object[] elementData = ArrayList.this.elementData;
                     if (offset + i >= elementData.length)
                         throw new ConcurrentModificationException();
@@ -1124,6 +1275,7 @@ public class ArrayList<E> extends AbstractList<E>
                     int i = cursor - 1;
                     if (i < 0)
                         throw new NoSuchElementException();
+                    // 直接返回原始容器中指定索引的元素
                     Object[] elementData = ArrayList.this.elementData;
                     if (offset + i >= elementData.length)
                         throw new ConcurrentModificationException();
@@ -1139,6 +1291,7 @@ public class ArrayList<E> extends AbstractList<E>
                     if (i >= size) {
                         return;
                     }
+                    // 直接遍历原始容器中的元素
                     final Object[] elementData = ArrayList.this.elementData;
                     if (offset + i >= elementData.length) {
                         throw new ConcurrentModificationException();
@@ -1165,6 +1318,8 @@ public class ArrayList<E> extends AbstractList<E>
                     checkForComodification();
 
                     try {
+                        // 调用SubList容器的删除接口
+                        // 注：此处不直接操作原始容器，主要是为了修改SubList容器的modCount与size字段
                         SubList.this.remove(lastRet);
                         cursor = lastRet;
                         lastRet = -1;
@@ -1180,6 +1335,7 @@ public class ArrayList<E> extends AbstractList<E>
                     checkForComodification();
 
                     try {
+                        // 直接更新原始容器中指定索引的元素
                         ArrayList.this.set(offset + lastRet, e);
                     } catch (IndexOutOfBoundsException ex) {
                         throw new ConcurrentModificationException();
@@ -1191,6 +1347,8 @@ public class ArrayList<E> extends AbstractList<E>
 
                     try {
                         int i = cursor;
+                        // 调用SubList容器的新增接口
+                        // 注：此处不直接操作原始容器，主要是为了修改SubList容器的modCount与size字段
                         SubList.this.add(i, e);
                         cursor = i + 1;
                         lastRet = -1;
@@ -1207,16 +1365,20 @@ public class ArrayList<E> extends AbstractList<E>
             };
         }
 
+        // 递归生成子列表视图。视图的元素范围：[fromIndex, toIndex)，从使用上，toIndex相当于是一个超尾索引
+        // 注：fromIndex与toIndex是相对于父容器（调用者）的索引偏移，而非原始容器
         public List<E> subList(int fromIndex, int toIndex) {
             subListRangeCheck(fromIndex, toIndex, size);
             return new SubList(this, offset, fromIndex, toIndex);
         }
 
+        // 索引越界检查。不能使用超尾索引
         private void rangeCheck(int index) {
             if (index < 0 || index >= this.size)
                 throw new IndexOutOfBoundsException(outOfBoundsMsg(index));
         }
 
+        // 添加接口的索引越界检查。可以使用超尾索引
         private void rangeCheckForAdd(int index) {
             if (index < 0 || index > this.size)
                 throw new IndexOutOfBoundsException(outOfBoundsMsg(index));
@@ -1226,11 +1388,13 @@ public class ArrayList<E> extends AbstractList<E>
             return "Index: "+index+", Size: "+this.size;
         }
 
+        // 在使用视图过程中，原始容器不能再进行结构性修改
         private void checkForComodification() {
             if (ArrayList.this.modCount != this.modCount)
                 throw new ConcurrentModificationException();
         }
 
+        // 获取子列表视图的分隔器对象实例。用于Stream流中
         public Spliterator<E> spliterator() {
             checkForComodification();
             return new ArrayListSpliterator<E>(ArrayList.this, offset,
@@ -1238,16 +1402,22 @@ public class ArrayList<E> extends AbstractList<E>
         }
     }
 
+    // 遍历消费容器中所有元素
     @Override
     public void forEach(Consumer<? super E> action) {
         Objects.requireNonNull(action);
+        // 保存遍历前容器修改次数
         final int expectedModCount = modCount;
+        // 保存遍历前容器的所有元素
         @SuppressWarnings("unchecked")
         final E[] elementData = (E[]) this.elementData;
+        // 保存遍历前容器元素个数
         final int size = this.size;
+        // 遍历消费容器元素。注：在遍历过程中，原始容器不能再进行结构性修改
         for (int i=0; modCount == expectedModCount && i < size; i++) {
             action.accept(elementData[i]);
         }
+        // 在遍历过程中，原始容器不能再进行结构性修改
         if (modCount != expectedModCount) {
             throw new ConcurrentModificationException();
         }
@@ -1266,12 +1436,14 @@ public class ArrayList<E> extends AbstractList<E>
      * @return a {@code Spliterator} over the elements in this list
      * @since 1.8
      */
+    // 获取ArrayList容器的分隔器对象实例。用于Stream流中
     @Override
     public Spliterator<E> spliterator() {
         return new ArrayListSpliterator<>(this, 0, -1, 0);
     }
 
     /** Index-based split-by-two, lazily initialized Spliterator */
+    // 定制的二分算法ArrayList容器的分隔器。用于Stream流中
     static final class ArrayListSpliterator<E> implements Spliterator<E> {
 
         /*
@@ -1306,9 +1478,14 @@ public class ArrayList<E> extends AbstractList<E>
          * these streamlinings.
          */
 
+        // 原始容器的引用
         private final ArrayList<E> list;
+        // 分隔器的起始索引，也是分隔器的正向消费元素进度索引
         private int index; // current index, modified on advance/split
+        // 分隔器的结束索引
         private int fence; // -1 until used; then one past last index
+        // 第一次分隔、消费分隔器时，立即保存原始容器的修改次数。在使用分隔器过程中，原始容器不能再进行结构性修改
+        // 注：modCount属性字段非常重要，可以有效的防止分隔器非法访问的问题
         private int expectedModCount; // initialized when fence set
 
         /** Create new spliterator covering the given  range */
@@ -1320,6 +1497,8 @@ public class ArrayList<E> extends AbstractList<E>
             this.expectedModCount = expectedModCount;
         }
 
+        // 获取结束索引。首个分隔器首次调用 getFence() 时 fence==-1，将其设置为原始容器的结尾索引
+        // 注：区分首个分隔器，是因为分隔器在使用过程中会不停的二分递归切分
         private int getFence() { // initialize fence to size on first use
             int hi; // (a specialized variant appears in method forEach)
             ArrayList<E> lst;
@@ -1327,6 +1506,8 @@ public class ArrayList<E> extends AbstractList<E>
                 if ((lst = list) == null)
                     hi = fence = 0;
                 else {
+                    // 第一次使用分隔器时，立即保存原始容器的修改次数。在使用分隔器过程中，原始容器不能再进行结构性修改
+                    // 注：modCount属性字段非常重要，可以有效的防止分隔器非法访问的问题
                     expectedModCount = lst.modCount;
                     hi = fence = lst.size;
                 }
@@ -1334,6 +1515,8 @@ public class ArrayList<E> extends AbstractList<E>
             return hi;
         }
 
+        // 二分切割分隔器，返回的新分隔器起始索引等于原始分隔器，结尾索引是原始容器的二分之一；而原始分隔器的起始索引被重置为二分之一
+        // 即：切分后，原始的分隔器引用后一半数据，返回的新分隔器引用前一半数据
         public ArrayListSpliterator<E> trySplit() {
             int hi = getFence(), lo = index, mid = (lo + hi) >>> 1;
             return (lo >= mid) ? null : // divide range in half unless too small
@@ -1341,14 +1524,17 @@ public class ArrayList<E> extends AbstractList<E>
                                             expectedModCount);
         }
 
+        // 消费分隔器中首个元素，执行指定方法
         public boolean tryAdvance(Consumer<? super E> action) {
             if (action == null)
                 throw new NullPointerException();
             int hi = getFence(), i = index;
             if (i < hi) {
+                // 设置下一次tryAdvance()的元素索引。即，当前元素被消费
                 index = i + 1;
                 @SuppressWarnings("unchecked") E e = (E)list.elementData[i];
                 action.accept(e);
+                // 在使用分隔器过程中，原始容器不能再进行结构性修改
                 if (list.modCount != expectedModCount)
                     throw new ConcurrentModificationException();
                 return true;
@@ -1356,30 +1542,39 @@ public class ArrayList<E> extends AbstractList<E>
             return false;
         }
 
+        // 消费分隔器中剩余元素，执行指定方法
         public void forEachRemaining(Consumer<? super E> action) {
             int i, hi, mc; // hoist accesses and checks from loop
             ArrayList<E> lst; Object[] a;
             if (action == null)
                 throw new NullPointerException();
+            // 获取原始容器的元素
             if ((lst = list) != null && (a = lst.elementData) != null) {
+                // 获取结束索引hi。首个分隔器首次时fence==-1，将其设置为原始容器的结尾索引
+                // 注：区分首个分隔器，是因为分隔器在使用过程中会不停的二分递归切分
                 if ((hi = fence) < 0) {
                     mc = lst.modCount;
                     hi = lst.size;
                 }
                 else
                     mc = expectedModCount;
+                // 消费分隔器中剩余元素
                 if ((i = index) >= 0 && (index = hi) <= a.length) {
+                    // 消费分隔器中剩余元素，执行指定方法
                     for (; i < hi; ++i) {
                         @SuppressWarnings("unchecked") E e = (E) a[i];
                         action.accept(e);
                     }
+                    // 消费成功，直接返回
                     if (lst.modCount == mc)
                         return;
                 }
             }
+            // 在使用分隔器过程中，原始容器不能再进行结构性修改
             throw new ConcurrentModificationException();
         }
 
+        // 分隔器引用原始容器中的元素个数
         public long estimateSize() {
             return (long) (getFence() - index);
         }
@@ -1389,16 +1584,22 @@ public class ArrayList<E> extends AbstractList<E>
         }
     }
 
+    // 按指定删除方法，删除ArrayList中的元素
+    // 注：该方法将删除分成：查找待删除元素、删除元素两个步骤。可保证查找元素时，若有异常发生或原始容器结构发生了变化，容器将不做任何修改
     @Override
     public boolean removeIf(Predicate<? super E> filter) {
         Objects.requireNonNull(filter);
         // figure out which elements are to be removed
         // any exception thrown from the filter predicate at this stage
         // will leave the collection unmodified
+
+        // 待删除元素个数
         int removeCount = 0;
+        // 待删除的元素索引的集合
         final BitSet removeSet = new BitSet(size);
         final int expectedModCount = modCount;
         final int size = this.size;
+        // 遍历查找待删除的元素索引
         for (int i=0; modCount == expectedModCount && i < size; i++) {
             @SuppressWarnings("unchecked")
             final E element = (E) elementData[i];
@@ -1407,6 +1608,7 @@ public class ArrayList<E> extends AbstractList<E>
                 removeCount++;
             }
         }
+        // 在查找待删除元素过程中，容器不能再进行结构性修改
         if (modCount != expectedModCount) {
             throw new ConcurrentModificationException();
         }
@@ -1415,14 +1617,17 @@ public class ArrayList<E> extends AbstractList<E>
         final boolean anyToRemove = removeCount > 0;
         if (anyToRemove) {
             final int newSize = size - removeCount;
+            // 顺序保存"除待删除"元素到容器前面
             for (int i=0, j=0; (i < size) && (j < newSize); i++, j++) {
                 i = removeSet.nextClearBit(i);
                 elementData[j] = elementData[i];
             }
+            // 清除容器后面的"待删除"元素
             for (int k=newSize; k < size; k++) {
                 elementData[k] = null;  // Let gc do its work
             }
             this.size = newSize;
+            // 在删除过程中，容器不能再进行结构性修改
             if (modCount != expectedModCount) {
                 throw new ConcurrentModificationException();
             }
@@ -1432,26 +1637,31 @@ public class ArrayList<E> extends AbstractList<E>
         return anyToRemove;
     }
 
+    // 按指定替换方法，替换ArrayList中的元素
     @Override
     @SuppressWarnings("unchecked")
     public void replaceAll(UnaryOperator<E> operator) {
         Objects.requireNonNull(operator);
         final int expectedModCount = modCount;
         final int size = this.size;
+        // 遍历替换容器中所有元素
         for (int i=0; modCount == expectedModCount && i < size; i++) {
             elementData[i] = operator.apply((E) elementData[i]);
         }
+        // 在替换过程中，容器不能再进行结构性修改
         if (modCount != expectedModCount) {
             throw new ConcurrentModificationException();
         }
         modCount++;
     }
 
+    // 按指定排序方法，排序ArrayList中的元素
     @Override
     @SuppressWarnings("unchecked")
     public void sort(Comparator<? super E> c) {
         final int expectedModCount = modCount;
         Arrays.sort((E[]) elementData, 0, size, c);
+        // 在排序过程中，容器不能再进行结构性修改
         if (modCount != expectedModCount) {
             throw new ConcurrentModificationException();
         }

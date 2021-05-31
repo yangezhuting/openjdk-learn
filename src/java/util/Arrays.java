@@ -3178,6 +3178,8 @@ public class Arrays {
      */
     @SuppressWarnings("unchecked")
     public static <T> T[] copyOf(T[] original, int newLength) {
+        // 申请一块 newLength 长度的数组内存，他的数据拷贝自原始的 original 数组内容
+        // 这个函数一般用在数组的扩缩容场景中。即：将 original 数组扩缩容至 newLength 长度
         return (T[]) copyOf(original, newLength, original.getClass());
     }
 
@@ -3206,10 +3208,15 @@ public class Arrays {
      * @since 1.6
      */
     public static <T,U> T[] copyOf(U[] original, int newLength, Class<? extends T[]> newType) {
+        // 申请一块 newLength 长度的数组内存，他的数据拷贝自原始的 original 数组内容。注：newType是数组的类型，不是数组元素的类型
+        // 这个函数一般用在数组的扩缩容场景中。即：将 original 数组扩缩容至 newLength 长度
+
+        // 当原始数组类型为Object[]时，可以直接使用new申请；若不是，则必须使用Array.newInstance进行申请，其参数是数组元素类型和数组长度
         @SuppressWarnings("unchecked")
         T[] copy = ((Object)newType == (Object)Object[].class)
             ? (T[]) new Object[newLength]
             : (T[]) Array.newInstance(newType.getComponentType(), newLength);
+        // 拷贝原始数组字节内容到新的数组内存中，拷贝长度取决于原始数组长度与新数组长度的最小值
         System.arraycopy(original, 0, copy, 0,
                          Math.min(original.length, newLength));
         return copy;

@@ -450,6 +450,7 @@ public abstract class AbstractCollection<E> implements Collection<E> {
      *
      * @return a string representation of this collection
      */
+    // 集合容器的toString()实现
     public String toString() {
         Iterator<E> it = iterator();
         if (! it.hasNext())

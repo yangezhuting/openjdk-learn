@@ -68,6 +68,7 @@ package java.util;
  * @since 1.2
  */
 
+// 可进行随机访问（按索引访问）的列表结构
 public abstract class AbstractList<E> extends AbstractCollection<E> implements List<E> {
     /**
      * Sole constructor.  (For invocation by subclass constructors, typically
@@ -509,14 +510,18 @@ public abstract class AbstractList<E> extends AbstractCollection<E> implements L
      * @param o the object to be compared for equality with this list
      * @return {@code true} if the specified object is equal to this list
      */
+    // 列表容器的equals()实现
+    // 容器中所有元素必须相同，但容器本身不必完全相同，可以是ArrayList/LinkedList等等
     public boolean equals(Object o) {
         if (o == this)
             return true;
+        // 容器只需是List类型即可
         if (!(o instanceof List))
             return false;
 
         ListIterator<E> e1 = listIterator();
         ListIterator<?> e2 = ((List<?>) o).listIterator();
+        // 容器中所有元素必须相同
         while (e1.hasNext() && e2.hasNext()) {
             E o1 = e1.next();
             Object o2 = e2.next();
@@ -535,6 +540,7 @@ public abstract class AbstractList<E> extends AbstractCollection<E> implements L
      *
      * @return the hash code value for this list
      */
+    // 列表容器的hashCode()实现
     public int hashCode() {
         int hashCode = 1;
         for (E e : this)
@@ -598,6 +604,11 @@ public abstract class AbstractList<E> extends AbstractCollection<E> implements L
      * does not wish to provide fail-fast iterators, this field may be
      * ignored.
      */
+    // modCount属性字段用来标识列表的底层数组是否有结构性的变化。结构性变化指的是：增、删元素
+    // 作用：用来支持迭代器的快速失败算法。即，快速检测是否有并发更新，从而可立即抛出 ConcurrentModificationException 异常
+    // 注意：实际上，如果一个列表创建了两个迭代器，其中一个调用了更新接口后，另一个迭代器将不可用，与是否是并发无关。
+    //      所以说它实际上是防止迭代器失效
+    // 重点：这个字段仅仅用来支持迭代器快速失败算法的，容器本身是非线程完全的，切不可用在多线程环境中
     protected transient int modCount = 0;
 
     private void rangeCheckForAdd(int index) {
@@ -770,6 +781,7 @@ class SubList<E> extends AbstractList<E> {
     }
 }
 
+// 可随机访问的列表容器类，相比SubList，它打上了RandomAccess标记接口
 class RandomAccessSubList<E> extends SubList<E> implements RandomAccess {
     RandomAccessSubList(AbstractList<E> list, int fromIndex, int toIndex) {
         super(list, fromIndex, toIndex);

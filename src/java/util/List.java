@@ -108,6 +108,7 @@ import java.util.function.UnaryOperator;
  * @since 1.2
  */
 
+// 有序可重复集合，可直接根据元素的索引来访问
 public interface List<E> extends Collection<E> {
     // Query Operations
 
