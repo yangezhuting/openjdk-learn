@@ -293,6 +293,8 @@ import java.util.function.LongConsumer;
  * @see Collection
  * @since 1.8
  */
+// 分隔器是一种特殊的迭代器，它能够反复切割原始容器中的元素到更小的分隔器中
+// 应用场景：将大数据反复“裂变”成一系列小数据。多应用在stream流处理中
 public interface Spliterator<T> {
     /**
      * If a remaining element exists, performs the given action on it,
@@ -483,6 +485,12 @@ public interface Spliterator<T> {
      * {@code ORDERED} are expected to preserve ordering constraints in
      * non-commutative parallel computations.
      */
+    // 该特性表示的是创建Spliterator的数据源是有序的
+    // 如果Spliterator有这个特点，那么在在调用trySplit方法进行分割时，分割出来的部分肯定是数据源的前面部分，
+    // 调用tryAdvance返回肯定也是从前面开始获取值，调用forEachRemaining方法也是从前到后的顺序进行遍历
+    //
+    // 对于任何列表，遍历顺序都是保证升序，但是对于HashSet之类基于散列值的集合，是不保证顺序的
+    // 在非交换并行计算中，如果指定的Spliterator是ORDERED的，那么在调用方应该也是保证是有序的
     public static final int ORDERED    = 0x00000010;
 
     /**
@@ -490,6 +498,7 @@ public interface Spliterator<T> {
      * encountered elements {@code x, y}, {@code !x.equals(y)}. This
      * applies for example, to a Spliterator based on a {@link Set}.
      */
+    // 该特性表示Spliterator中遍历的每个值都是不同的，这个Spliterator是基于Set的
     public static final int DISTINCT   = 0x00000001;
 
     /**
@@ -504,6 +513,10 @@ public interface Spliterator<T> {
      * @apiNote The spliterators for {@code Collection} classes in the JDK that
      * implement {@link NavigableSet} or {@link SortedSet} report {@code SORTED}.
      */
+    // 该特性表示Spliterator的数据源支持定义Comparator
+    // 如果Spliterator有该属性，则调用getCompartor方法，将返回数据源的Comparator，如果没有设置，则返回null
+    //
+    // 如果Spliterator有SORTED属性，则必须要有ORDERED属性，JDK提供的NavigableSet和SortedSet的Spliterator都有该属性
     public static final int SORTED     = 0x00000004;
 
     /**
@@ -518,6 +531,9 @@ public interface Spliterator<T> {
      * those for {@link HashSet}, that cover a sub-set of elements and
      * approximate their reported size do not.
      */
+    // 该特性表示在遍历或者拆分之前调用estimateSize方法返回的值，在数据源的结构没有发生变更的情况下，表示遍历完整数据源的准确元素数量
+    //
+    // 大多数集合类都有该属性，返回集合元素的大小，但是像HashSet这样集合，在遍历之前或遍历之后会返回集合的大小，其他时候返回的都是0
     public static final int SIZED      = 0x00000040;
 
     /**
@@ -525,6 +541,7 @@ public interface Spliterator<T> {
      * encountered elements will not be {@code null}. (This applies,
      * for example, to most concurrent collections, queues, and maps.)
      */
+    // 该特性表示数据源中的所有元素都不为空，像很多并发集合类，队列以及Map
     public static final int NONNULL    = 0x00000100;
 
     /**
@@ -536,6 +553,9 @@ public interface Spliterator<T> {
      * {@link ConcurrentModificationException}) concerning structural
      * interference detected during traversal.
      */
+    // 该特性表示数据源的结构不可变更，也就是说，在遍历过程中，像新增，替换，或删除这些操作都是不允许的
+    // 如果Spliterator没有报告IMMUTABLE或CONCURRENT特性，当在遍历过程中检测到数据源发生结构的变更，要有相应的处理策略的说明，比如
+    // 抛出ConcurrentModificationException
     public static final int IMMUTABLE  = 0x00000400;
 
     /**
@@ -558,6 +578,15 @@ public interface Spliterator<T> {
      * Spliterator construction, but possibly not reflecting subsequent
      * additions or removals.
      */
+    // 该特性表示数据源可以由多个线程同时修改(比如新增，替换，删除)，而不需要调用方进行同步控制，尽管如此，Spliterator还是希望能够
+    // 有一个文档能够说明在遍历过程发生变更而产生影响的针对策略。
+    //
+    // 顶层的Spliterator不应该同时有CONCURRENT和SIZED属性，因为，如果已知有限的大小，可能会在遍历过程中数据源的变更而变化，
+    // 这样的Spliterator是不一致的，无法保证用Spliterator进行任何计算。
+    // 子Spliterator可以有SIZED特性，当子Spliterator的size是一致的，如果还能满足在遍历过程，对数据源的添加和删除不会影响到
+    // 子Spliterator 即可。
+    //
+    // 大多数并发的集合类都维护一致性策略，用来保证在构建Spliterator时的元素的准确性，但是后期的新增或删除则无法反映
     public static final int CONCURRENT = 0x00001000;
 
     /**
@@ -575,6 +604,12 @@ public interface Spliterator<T> {
      * {@code SUBSIZED}, since it is common to know the size of the entire tree
      * but not the exact sizes of subtrees.
      */
+    // 这个特性表示所有从trySplit方法得到的Spliterator都必须有SIZED和SUBSIZED属性，这意味着所有子Spliterator，无论是直接还是间接，
+    // 都必须是SIZED。如果有SUBSIZED属性的Spliterator没有按照要求报告SIZED属性，则是相互矛盾的，无法保证使用那个Spliterator进行的
+    // 任何计算的结果。
+    //
+    // 部分Spliterator，比如近似平衡的二叉树的顶层Spliterator，将会报告SIZED，但是没有SUBSIZED，因为通常只能知道整棵树的大小，但是无法
+    // 知道子树的精确大小
     public static final int SUBSIZED = 0x00004000;
 
     /**

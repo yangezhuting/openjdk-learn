@@ -3801,6 +3801,9 @@ public class Arrays {
      * @param a the array by which the list will be backed
      * @return a list view of the specified array
      */
+    // 以可变参数方式创建一个Arrays.ArrayList类型的列表容器
+    // 注：Arrays.ArrayList与通常的Java.util.ArrayList容器基本是一致的，不同的是Arrays.ArrayList是一个泛型，在使
+    // 用上它会影响到ArrayList.toArray()方法返回的类型，它的实际类型是T[]，而不是Object[]。
     @SafeVarargs
     @SuppressWarnings("varargs")
     public static <T> List<T> asList(T... a) {
@@ -3825,6 +3828,7 @@ public class Arrays {
             return a.length;
         }
 
+        // 注：返回值的实际类型是T[]，而不是Object[]
         @Override
         public Object[] toArray() {
             return a.clone();

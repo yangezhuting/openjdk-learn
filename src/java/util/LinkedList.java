@@ -80,10 +80,12 @@ import java.util.function.Consumer;
  * @param <E> the type of elements held in this collection
  */
 
+// 可高效的进行插入、删除的列表结构。可作为队列结构（头尾操作）使用，用 List,Deque 标识
 public class LinkedList<E>
     extends AbstractSequentialList<E>
     implements List<E>, Deque<E>, Cloneable, java.io.Serializable
 {
+    // 容器中元素的实际个数
     transient int size = 0;
 
     /**
@@ -91,6 +93,7 @@ public class LinkedList<E>
      * Invariant: (first == null && last == null) ||
      *            (first.prev == null && first.item != null)
      */
+    // 链表首节点的指针
     transient Node<E> first;
 
     /**
@@ -98,6 +101,7 @@ public class LinkedList<E>
      * Invariant: (first == null && last == null) ||
      *            (last.next == null && last.item != null)
      */
+    // 链表尾节点的指针
     transient Node<E> last;
 
     /**
@@ -114,6 +118,7 @@ public class LinkedList<E>
      * @param  c the collection whose elements are to be placed into this list
      * @throws NullPointerException if the specified collection is null
      */
+    // 构造一个列表容器，其中的元素来自容器|c|中的元素
     public LinkedList(Collection<? extends E> c) {
         this();
         addAll(c);
@@ -122,64 +127,89 @@ public class LinkedList<E>
     /**
      * Links e as first element.
      */
+    // 将数据|e|插入链表头部
     private void linkFirst(E e) {
         final Node<E> f = first;
+        // 将数据|e|包装成链表的节点，其前驱节点指针为null，后驱节点指针为原始的头部节点的指针
         final Node<E> newNode = new Node<>(null, e, f);
+        // 将头部节点指针设置为新节点
         first = newNode;
+        // 1. 若原始头部节点指针为空，将链表尾节点指针设置为新节点
+        // 2. 若原始头部节点指针不为空，将原始头部节点指针指向的节点的前驱指针设置为新节点
         if (f == null)
             last = newNode;
         else
             f.prev = newNode;
         size++;
+        // 添加元素时，需设置容器结构有变化的标志位
         modCount++;
     }
 
     /**
      * Links e as last element.
      */
+    // 将数据|e|插入链表尾部
     void linkLast(E e) {
         final Node<E> l = last;
+        // 将数据|e|包装成链表的节点，其后驱节点指针为null，前驱节点指针为原始的尾部节点的指针
         final Node<E> newNode = new Node<>(l, e, null);
+        // 将尾部节点指针设置为新节点
         last = newNode;
+        // 1. 若原始尾部节点指针为空，将链表尾节点指针设置为新节点
+        // 2. 若原始尾部节点指针不为空，将原始尾部节点指针指向的节点的后驱指针设置为新节点
         if (l == null)
             first = newNode;
         else
             l.next = newNode;
         size++;
+        // 添加元素时，需设置容器结构有变化的标志位
         modCount++;
     }
 
     /**
      * Inserts element e before non-null Node succ.
      */
+    // 将数据|e|插入链表节点|succ|的前面
+    // 注：|succ|参数不能为null
     void linkBefore(E e, Node<E> succ) {
         // assert succ != null;
         final Node<E> pred = succ.prev;
+        // 将数据|e|包装成链表的节点，其前驱节点指针为|succ|的前驱节点的指针，后驱节点指针为|succ|
         final Node<E> newNode = new Node<>(pred, e, succ);
+        // 将|succ|的前驱节点指针设置为新节点
         succ.prev = newNode;
+        // 1. 若|succ|的前驱节点指针为空，说明|succ|节点就是头节点，将链表头节点指针设置为新节点
+        // 2. 若|succ|的前驱节点指针不为空，将|succ|的前驱节点的后驱节点指针设置为新节点
         if (pred == null)
             first = newNode;
         else
             pred.next = newNode;
         size++;
+        // 添加元素时，需设置容器结构有变化的标志位
         modCount++;
     }
 
     /**
      * Unlinks non-null first node f.
      */
+    // 从链表中删除头节点|f|，返回头节点中存放的数据
+    // 注：|f|不能为空，且必须是头节点
     private E unlinkFirst(Node<E> f) {
         // assert f == first && f != null;
         final E element = f.item;
+        // 删除头节点|f|，将头节点指针设置为原始头节点的后驱节点
         final Node<E> next = f.next;
         f.item = null;
         f.next = null; // help GC
         first = next;
+        // 1. 若原始头节点的后驱节点指针为空，说明链表只有一个元素，将链表尾节点指针也设置为null
+        // 2. 若原始头节点的后驱节点指针不为空，将原始头节点的后驱节点的前驱节点指针设置为null
         if (next == null)
             last = null;
         else
             next.prev = null;
         size--;
+        // 删除元素时，需设置容器结构有变化的标志位
         modCount++;
         return element;
     }
@@ -187,18 +217,24 @@ public class LinkedList<E>
     /**
      * Unlinks non-null last node l.
      */
+    // 从链表中删除尾节点|l|，返回尾节点中存放的数据
+    // 注：|l|不能为空，且必须是尾节点
     private E unlinkLast(Node<E> l) {
         // assert l == last && l != null;
         final E element = l.item;
+        // 删除尾节点|f|，将尾节点指针设置为原始头节点的前驱节点
         final Node<E> prev = l.prev;
         l.item = null;
         l.prev = null; // help GC
         last = prev;
+        // 1. 若原始尾节点的前驱节点指针为空，说明链表只有一个元素，将链表头节点指针也设置为null
+        // 2. 若原始尾节点的前驱节点指针不为空，将原始尾节点的前驱节点的后驱节点指针设置为null
         if (prev == null)
             first = null;
         else
             prev.next = null;
         size--;
+        // 删除元素时，需设置容器结构有变化的标志位
         modCount++;
         return element;
     }
@@ -206,28 +242,38 @@ public class LinkedList<E>
     /**
      * Unlinks non-null node x.
      */
+    // 从链表中删除节点|x|，返回|x|节点中存放的数据
+    // 注：|x|不能为空
     E unlink(Node<E> x) {
         // assert x != null;
         final E element = x.item;
         final Node<E> next = x.next;
         final Node<E> prev = x.prev;
 
+        // 1. 若|x|节点的前驱节点指针为空，说明链表只有一个元素，将链表头节点指针也设置为|x|的后驱节点指针
+        // 2. 若|x|节点的前驱节点指针不为空，将|x|节点的前驱节点的后驱节点指针设置为|x|的后驱节点指针
         if (prev == null) {
             first = next;
         } else {
             prev.next = next;
+            // 使GC功能有效
             x.prev = null;
         }
 
+        // 1. 若|x|节点的后驱节点指针为空，说明链表只有一个元素，将链表尾节点指针设置为|x|的前驱节点指针
+        // 2. 若|x|节点的后驱节点指针不为空，将|x|节点的后驱节点的前驱节点指针设置为|x|的前驱节点指针
         if (next == null) {
             last = prev;
         } else {
             next.prev = prev;
+            // 使GC功能有效
             x.next = null;
         }
 
+        // 使GC功能有效
         x.item = null;
         size--;
+        // 删除元素时，需设置容器结构有变化的标志位
         modCount++;
         return element;
     }
@@ -238,6 +284,7 @@ public class LinkedList<E>
      * @return the first element in this list
      * @throws NoSuchElementException if this list is empty
      */
+    // 获取头节点中的数据
     public E getFirst() {
         final Node<E> f = first;
         if (f == null)
@@ -251,6 +298,7 @@ public class LinkedList<E>
      * @return the last element in this list
      * @throws NoSuchElementException if this list is empty
      */
+    // 获取尾节点中的数据
     public E getLast() {
         final Node<E> l = last;
         if (l == null)
@@ -264,6 +312,8 @@ public class LinkedList<E>
      * @return the first element from this list
      * @throws NoSuchElementException if this list is empty
      */
+    // 从链表中删除头节点，返回头节点中存放的数据
+    // 注：链表无节点，立即抛出异常
     public E removeFirst() {
         final Node<E> f = first;
         if (f == null)
@@ -277,6 +327,8 @@ public class LinkedList<E>
      * @return the last element from this list
      * @throws NoSuchElementException if this list is empty
      */
+    // 从链表中删除尾节点，返回尾节点中存放的数据
+    // 注：链表无节点，立即抛出异常
     public E removeLast() {
         final Node<E> l = last;
         if (l == null)
@@ -289,6 +341,7 @@ public class LinkedList<E>
      *
      * @param e the element to add
      */
+    // 将数据|e|插入链表头部
     public void addFirst(E e) {
         linkFirst(e);
     }
@@ -300,6 +353,7 @@ public class LinkedList<E>
      *
      * @param e the element to add
      */
+    // 将数据|e|插入链表尾部
     public void addLast(E e) {
         linkLast(e);
     }
@@ -313,6 +367,7 @@ public class LinkedList<E>
      * @param o element whose presence in this list is to be tested
      * @return {@code true} if this list contains the specified element
      */
+    // 查找对象|o|是否在列表中
     public boolean contains(Object o) {
         return indexOf(o) != -1;
     }
@@ -334,6 +389,7 @@ public class LinkedList<E>
      * @param e element to be appended to this list
      * @return {@code true} (as specified by {@link Collection#add})
      */
+    // 默认的添加方法，将数据|e|插入链表尾部
     public boolean add(E e) {
         linkLast(e);
         return true;
@@ -352,6 +408,7 @@ public class LinkedList<E>
      * @param o element to be removed from this list, if present
      * @return {@code true} if this list contained the specified element
      */
+    // 删除容器中第一个等于对象|o|的元素。元素不存在，返回false
     public boolean remove(Object o) {
         if (o == null) {
             for (Node<E> x = first; x != null; x = x.next) {
@@ -383,6 +440,7 @@ public class LinkedList<E>
      * @return {@code true} if this list changed as a result of the call
      * @throws NullPointerException if the specified collection is null
      */
+    // 将容器|c|中的所有元素顺序的添加到当前容器的尾部
     public boolean addAll(Collection<? extends E> c) {
         return addAll(size, c);
     }
@@ -402,14 +460,19 @@ public class LinkedList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      * @throws NullPointerException if the specified collection is null
      */
+    // 将容器|c|中的所有元素顺序的添加到当前容器从|index|索引的起始处，|c|中的首元素存放在当前容器的|index|索引之中
+    // 注：若|index|是超尾索引值，则相当于将容器|c|中的所有元素顺序的添加到当前容器的尾部
     public boolean addAll(int index, Collection<? extends E> c) {
+        // 添加逻辑中的访问越界判定。索引可以为最后一个元素值（超尾索引），也可以是0
         checkPositionIndex(index);
 
+        // 将容器|c|中的元素转换至数组
         Object[] a = c.toArray();
         int numNew = a.length;
         if (numNew == 0)
             return false;
 
+        // 获取插入点的前驱指针、|index|索引的节点
         Node<E> pred, succ;
         if (index == size) {
             succ = null;
@@ -419,6 +482,7 @@ public class LinkedList<E>
             pred = succ.prev;
         }
 
+        // 遍历数组，将他们顺序的添加到当前容器从|index|索引的起始处
         for (Object o : a) {
             @SuppressWarnings("unchecked") E e = (E) o;
             Node<E> newNode = new Node<>(pred, e, null);
@@ -426,9 +490,12 @@ public class LinkedList<E>
                 first = newNode;
             else
                 pred.next = newNode;
+            // 重置前驱节点，保持正向添加。即，新容器中元素的顺序与原始容器|c|中顺序一致
             pred = newNode;
         }
 
+        // 1. 若|succ|指针为空，说明是尾部添加元素，将链表尾节点指针设置为|c|的容器中最后一个节点
+        // 2. 若|succ|指针不为空，联通|succ|节点的前后节点的指针
         if (succ == null) {
             last = pred;
         } else {
@@ -437,6 +504,7 @@ public class LinkedList<E>
         }
 
         size += numNew;
+        // 添加元素时，需设置容器结构有变化的标志位
         modCount++;
         return true;
     }
@@ -445,11 +513,13 @@ public class LinkedList<E>
      * Removes all of the elements from this list.
      * The list will be empty after this call returns.
      */
+    // 清除容器中所有元素
     public void clear() {
         // Clearing all of the links between nodes is "unnecessary", but:
         // - helps a generational GC if the discarded nodes inhabit
         //   more than one generation
         // - is sure to free memory even if there is a reachable Iterator
+        // 逐个将容器中的元素置为null，而不是简单的将size置0，主要为了GC
         for (Node<E> x = first; x != null; ) {
             Node<E> next = x.next;
             x.item = null;
@@ -459,6 +529,7 @@ public class LinkedList<E>
         }
         first = last = null;
         size = 0;
+        // 清除容器时，需设置容器结构有变化的标志位
         modCount++;
     }
 
@@ -473,7 +544,9 @@ public class LinkedList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
     public E get(int index) {
+        // 访问越界判定
         checkElementIndex(index);
+        // 获取|index|索引位置的链表节点中实际数据
         return node(index).item;
     }
 
@@ -487,7 +560,9 @@ public class LinkedList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
     public E set(int index, E element) {
+        // 访问越界判定
         checkElementIndex(index);
+        // 获取并设置|index|索引位置的链表节点
         Node<E> x = node(index);
         E oldVal = x.item;
         x.item = element;
@@ -504,8 +579,11 @@ public class LinkedList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
     public void add(int index, E element) {
+        // 添加方法中访问越界判定
         checkPositionIndex(index);
 
+        // 1. 将数据|element|添加到尾部
+        // 2. 将数据|element|插入|index|链表节点的前面（自己成为|index|索引节点）
         if (index == size)
             linkLast(element);
         else
@@ -522,7 +600,9 @@ public class LinkedList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
     public E remove(int index) {
+        // 访问越界判定
         checkElementIndex(index);
+        // 从链表中删除|index|索引节点，返回|index|索引节点中存放的数据
         return unlink(node(index));
     }
 
@@ -550,11 +630,13 @@ public class LinkedList<E>
         return "Index: "+index+", Size: "+size;
     }
 
+    // 访问越界判定
     private void checkElementIndex(int index) {
         if (!isElementIndex(index))
             throw new IndexOutOfBoundsException(outOfBoundsMsg(index));
     }
 
+    // 添加方法中访问越界判定。索引可以为最后一个元素值（超尾索引），也可以是0
     private void checkPositionIndex(int index) {
         if (!isPositionIndex(index))
             throw new IndexOutOfBoundsException(outOfBoundsMsg(index));
@@ -563,9 +645,11 @@ public class LinkedList<E>
     /**
      * Returns the (non-null) Node at the specified element index.
      */
+    // 获取|index|索引位置的链表节点
     Node<E> node(int index) {
         // assert isElementIndex(index);
 
+        // 当|index|索引小于链表长度的一半时，正向遍历，否则从尾部逆向遍历
         if (index < (size >> 1)) {
             Node<E> x = first;
             for (int i = 0; i < index; i++)
@@ -592,6 +676,7 @@ public class LinkedList<E>
      * @return the index of the first occurrence of the specified element in
      *         this list, or -1 if this list does not contain the element
      */
+    // 正向查找对象|o|在列表中的索引值，查找失败返回-1
     public int indexOf(Object o) {
         int index = 0;
         if (o == null) {
@@ -621,6 +706,7 @@ public class LinkedList<E>
      * @return the index of the last occurrence of the specified element in
      *         this list, or -1 if this list does not contain the element
      */
+    // 逆向查找对象|o|在列表中的索引值，查找失败返回-1
     public int lastIndexOf(Object o) {
         int index = size;
         if (o == null) {
@@ -647,6 +733,8 @@ public class LinkedList<E>
      * @return the head of this list, or {@code null} if this list is empty
      * @since 1.5
      */
+    // 检索但不删除列表的头节点中的数据
+    // 注：空链表，返回null
     public E peek() {
         final Node<E> f = first;
         return (f == null) ? null : f.item;
@@ -659,6 +747,8 @@ public class LinkedList<E>
      * @throws NoSuchElementException if this list is empty
      * @since 1.5
      */
+    // 检索但不删除列表的头节点中的数据
+    // 注：空链表，抛出异常
     public E element() {
         return getFirst();
     }
@@ -669,6 +759,8 @@ public class LinkedList<E>
      * @return the head of this list, or {@code null} if this list is empty
      * @since 1.5
      */
+    // 检索并删除列表的头节点中的数据
+    // 注：空链表，返回null
     public E poll() {
         final Node<E> f = first;
         return (f == null) ? null : unlinkFirst(f);
@@ -681,6 +773,8 @@ public class LinkedList<E>
      * @throws NoSuchElementException if this list is empty
      * @since 1.5
      */
+    // 检索并删除列表的头节点中的数据
+    // 注：空链表，抛出异常
     public E remove() {
         return removeFirst();
     }
@@ -692,6 +786,7 @@ public class LinkedList<E>
      * @return {@code true} (as specified by {@link Queue#offer})
      * @since 1.5
      */
+    // 将数据|e|插入链表尾部
     public boolean offer(E e) {
         return add(e);
     }
@@ -704,6 +799,7 @@ public class LinkedList<E>
      * @return {@code true} (as specified by {@link Deque#offerFirst})
      * @since 1.6
      */
+    // 将数据|e|插入链表头部
     public boolean offerFirst(E e) {
         addFirst(e);
         return true;
@@ -716,6 +812,7 @@ public class LinkedList<E>
      * @return {@code true} (as specified by {@link Deque#offerLast})
      * @since 1.6
      */
+    // 将数据|e|插入链表尾部
     public boolean offerLast(E e) {
         addLast(e);
         return true;
@@ -729,6 +826,8 @@ public class LinkedList<E>
      *         if this list is empty
      * @since 1.6
      */
+    // 检索但不删除列表的头节点中的数据
+    // 注：空链表，返回null
     public E peekFirst() {
         final Node<E> f = first;
         return (f == null) ? null : f.item;
@@ -742,6 +841,8 @@ public class LinkedList<E>
      *         if this list is empty
      * @since 1.6
      */
+    // 检索但不删除列表的尾节点中的数据
+    // 注：空链表，返回null
     public E peekLast() {
         final Node<E> l = last;
         return (l == null) ? null : l.item;
@@ -755,6 +856,8 @@ public class LinkedList<E>
      *     this list is empty
      * @since 1.6
      */
+    // 检索并删除列表的头节点中的数据
+    // 注：空链表，返回null
     public E pollFirst() {
         final Node<E> f = first;
         return (f == null) ? null : unlinkFirst(f);
@@ -768,6 +871,8 @@ public class LinkedList<E>
      *     this list is empty
      * @since 1.6
      */
+    // 检索并删除列表的尾节点中的数据
+    // 注：空链表，返回null
     public E pollLast() {
         final Node<E> l = last;
         return (l == null) ? null : unlinkLast(l);
@@ -782,6 +887,7 @@ public class LinkedList<E>
      * @param e the element to push
      * @since 1.6
      */
+    // 将数据|e|插入链表头部
     public void push(E e) {
         addFirst(e);
     }
@@ -797,6 +903,8 @@ public class LinkedList<E>
      * @throws NoSuchElementException if this list is empty
      * @since 1.6
      */
+    // 从链表中删除头节点，返回头节点中存放的数据
+    // 注：链表无节点，立即抛出异常
     public E pop() {
         return removeFirst();
     }
@@ -810,6 +918,7 @@ public class LinkedList<E>
      * @return {@code true} if the list contained the specified element
      * @since 1.6
      */
+    // 删除容器中第一个等于对象|o|的元素。元素不存在，返回false
     public boolean removeFirstOccurrence(Object o) {
         return remove(o);
     }
@@ -823,6 +932,7 @@ public class LinkedList<E>
      * @return {@code true} if the list contained the specified element
      * @since 1.6
      */
+    // 删除容器中逆向的第一个等于对象|o|的元素。元素不存在，返回false
     public boolean removeLastOccurrence(Object o) {
         if (o == null) {
             for (Node<E> x = last; x != null; x = x.prev) {
@@ -863,15 +973,25 @@ public class LinkedList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      * @see List#listIterator(int)
      */
+    // 获取列表迭代器。迭代起始位置为原始容器的|index|索引
     public ListIterator<E> listIterator(int index) {
         checkPositionIndex(index);
         return new ListItr(index);
     }
 
+    // 列表迭代器。主要应用在与位置相关的容器上，比如 ArrayList, LinkedList, SubList
+    // 1. 提供增、删、改、查接口，如 set(E e), add(E e)；不管概念还是实现上，这两个接口都与位置相关
+    // 2. 相比Iterator接口，增加了前向迭代接口，如 hasPrevious(),previous(),previousIndex(),nextIndex()
+    // 注：迭代器的工作是辅助具体的容器进行索引的自动化管理，它不持有实际的数据
     private class ListItr implements ListIterator<E> {
+        // 当前迭代节点。即，调用remove()方法后，迭代器回退索引
         private Node<E> lastReturned;
+        // 下一次迭代节点。即，调用next()方法返回的元素
         private Node<E> next;
+        // 下一次迭代索引
         private int nextIndex;
+        // 生成迭代器时，立即保存原始容器的修改次数。在使用迭代器过程中，原始容器不能再进行结构性修改
+        // 注：modCount属性字段非常重要，可以有效的防止迭代器失效问题
         private int expectedModCount = modCount;
 
         ListItr(int index) {
@@ -886,10 +1006,13 @@ public class LinkedList<E>
 
         public E next() {
             checkForComodification();
+            // 迭代越界时，立即抛出异常。调用next()前，强烈建议先调用hasNext()
             if (!hasNext())
                 throw new NoSuchElementException();
 
+            // 设置上一次迭代节点，并返回本次迭代的元素
             lastReturned = next;
+            // 设置下一次next()迭代节点
             next = next.next;
             nextIndex++;
             return lastReturned.item;
@@ -901,6 +1024,7 @@ public class LinkedList<E>
 
         public E previous() {
             checkForComodification();
+            // 迭代越界时，立即抛出异常。调用previous()前，强烈建议先调用hasPrevious()
             if (!hasPrevious())
                 throw new NoSuchElementException();
 
@@ -919,6 +1043,7 @@ public class LinkedList<E>
 
         public void remove() {
             checkForComodification();
+            // 调用remove()前，需调用next()
             if (lastReturned == null)
                 throw new IllegalStateException();
 
@@ -928,7 +1053,9 @@ public class LinkedList<E>
                 next = lastNext;
             else
                 nextIndex--;
+            // 将上一次迭代索引置为无效
             lastReturned = null;
+            // 自增迭代次数。原始容器的mc在unlink()方法中更新
             expectedModCount++;
         }
 
@@ -941,35 +1068,45 @@ public class LinkedList<E>
 
         public void add(E e) {
             checkForComodification();
+            // 将上一次迭代索引置为无效
             lastReturned = null;
             if (next == null)
                 linkLast(e);
             else
                 linkBefore(e, next);
             nextIndex++;
+            // 自增迭代次数。原始容器的mc在linkLast()/linkBefore()方法中更新
             expectedModCount++;
         }
 
+        // 从当前迭代索引，批量遍历消费剩余的元素
         public void forEachRemaining(Consumer<? super E> action) {
             Objects.requireNonNull(action);
+            // 从当前迭代位置，遍历消费容器剩余元素。注：在遍历过程中，原始容器不能再进行结构性修改
             while (modCount == expectedModCount && nextIndex < size) {
                 action.accept(next.item);
                 lastReturned = next;
                 next = next.next;
                 nextIndex++;
             }
+            // 在使用迭代器过程中，原始容器不能再进行结构性修改
             checkForComodification();
         }
 
+        // 在使用迭代器过程中，原始容器不能再进行结构性修改
         final void checkForComodification() {
             if (modCount != expectedModCount)
                 throw new ConcurrentModificationException();
         }
     }
 
+    // 链表节点。双向链表
     private static class Node<E> {
+        // 节点中存放的实际元素的指针
         E item;
+        // 后驱节点指针
         Node<E> next;
+        // 前驱节点指针
         Node<E> prev;
 
         Node(Node<E> prev, E element, Node<E> next) {
@@ -982,6 +1119,7 @@ public class LinkedList<E>
     /**
      * @since 1.6
      */
+    // 获取降序迭代器。即，向前迭代遍历
     public Iterator<E> descendingIterator() {
         return new DescendingIterator();
     }
@@ -989,6 +1127,7 @@ public class LinkedList<E>
     /**
      * Adapter to provide descending iterators via ListItr.previous
      */
+    // 降序迭代器，即，向前迭代遍历。主要应用在与位置相关的容器上，比如 ArrayList, LinkedList, SubList
     private class DescendingIterator implements Iterator<E> {
         private final ListItr itr = new ListItr(size());
         public boolean hasNext() {
@@ -1046,6 +1185,7 @@ public class LinkedList<E>
      * @return an array containing all of the elements in this list
      *         in proper sequence
      */
+    // 将列表容器中的数据转换成数组返回，这个方法返回的是Object[]的数组类型
     public Object[] toArray() {
         Object[] result = new Object[size];
         int i = 0;
@@ -1092,6 +1232,7 @@ public class LinkedList<E>
      *         this list
      * @throws NullPointerException if the specified array is null
      */
+    // 将列表容器中的数据转换成数组返回，这个方法返回的是T[]的数组类型。当数组|a|长度足够时，直接使用它
     @SuppressWarnings("unchecked")
     public <T> T[] toArray(T[] a) {
         if (a.length < size)
@@ -1102,6 +1243,7 @@ public class LinkedList<E>
         for (Node<E> x = first; x != null; x = x.next)
             result[i++] = x.item;
 
+        // 将多余的数组元素置为null
         if (a.length > size)
             a[size] = null;
 
@@ -1165,19 +1307,29 @@ public class LinkedList<E>
      * @return a {@code Spliterator} over the elements in this list
      * @since 1.8
      */
+    // 获取LinkedList容器的分隔器对象实例。用于Stream流中
     @Override
     public Spliterator<E> spliterator() {
         return new LLSpliterator<E>(this, -1, 0);
     }
 
     /** A customized variant of Spliterators.IteratorSpliterator */
+    // 算法核心是对容器按指数级数量进行切割。场景：将大数据反复“裂变”成一系列的小数据。多应用在stream流处理中
+    // 注：切割容器时，切割数量从|1<<10|开始，每切割一次，数量增加一倍（即，切割得到的ArraySpliterator中元素增加一倍），最大切割的数量为|1<<25|
+    // 注：分隔器是一种特殊的迭代器
     static final class LLSpliterator<E> implements Spliterator<E> {
         static final int BATCH_UNIT = 1 << 10;  // batch array size increment
         static final int MAX_BATCH = 1 << 25;  // max batch array size;
+        // 原始容器的引用
         final LinkedList<E> list; // null OK unless traversed
+        // 分隔器的起始节点的指针
         Node<E> current;      // current node; null until initialized
+        // 分隔器的中含有元素个数
         int est;              // size estimate; -1 until first needed
+        // 第一次分隔、消费分隔器时，立即保存原始容器的修改次数。在使用分隔器过程中，原始容器不能再进行结构性修改
+        // 注：modCount属性字段非常重要，可以有效的防止分隔器非法访问的问题
         int expectedModCount; // initialized when est set
+        // 分隔容器是切割数量
         int batch;            // batch size for splits
 
         LLSpliterator(LinkedList<E> list, int est, int expectedModCount) {
@@ -1186,6 +1338,8 @@ public class LinkedList<E>
             this.expectedModCount = expectedModCount;
         }
 
+        // 获取分隔器的中含有元素个数。原始分隔器首次调用 getEst() 时 est==-1，将其设置为原始容器的长度
+        // 注：仅区分原始分隔器，是因为trySplit()返回了Spliterators.ArraySpliterator分隔器，其再次分隔是不会调用getEst()方法
         final int getEst() {
             int s; // force initialization
             final LinkedList<E> lst;
@@ -1193,6 +1347,8 @@ public class LinkedList<E>
                 if ((lst = list) == null)
                     s = est = 0;
                 else {
+                    // 第一次使用分隔器时，立即保存原始容器的修改次数。在使用分隔器过程中，原始容器不能再进行结构性修改
+                    // 注：modCount属性字段非常重要，可以有效的防止分隔器非法访问的问题
                     expectedModCount = lst.modCount;
                     current = lst.first;
                     s = est = lst.size;
@@ -1201,52 +1357,69 @@ public class LinkedList<E>
             return s;
         }
 
+        // 评估剩余元素数量的大小
         public long estimateSize() { return (long) getEst(); }
 
+        // 按指数级数量进行切割分隔器，返回的新分隔器包含元素按指数级增长；而原始分隔器按指数级数量向后缩短
+        // 即：切分后，原始的分隔器引用后面数据(LinkedList.LLSpliterator)；返回的新分隔器引用后面的数据(Spliterators.ArraySpliterator)
         public Spliterator<E> trySplit() {
             Node<E> p;
+            // 分隔器中剩余的元素个数
             int s = getEst();
             if (s > 1 && (p = current) != null) {
+                // 切割数量，指数级增长
                 int n = batch + BATCH_UNIT;
                 if (n > s)
                     n = s;
                 if (n > MAX_BATCH)
                     n = MAX_BATCH;
+                // 存放本次分隔数据至数组容器中，分隔的前面部分
                 Object[] a = new Object[n];
                 int j = 0;
                 do { a[j++] = p.item; } while ((p = p.next) != null && j < n);
+                // 设置当前分隔器为新的起始点
                 current = p;
+                // 下一次分隔数量的增量，指数级增长算法
                 batch = j;
                 est = s - j;
+                // 返回数组分隔迭代器Spliterators.ArraySpliterator对象实例
+                // 注：ORDERED表示该子分隔器的迭代顺序是按照原本容器中的顺序
                 return Spliterators.spliterator(a, 0, j, Spliterator.ORDERED);
             }
             return null;
         }
 
+        // 消费分隔器中剩余元素，执行指定方法
         public void forEachRemaining(Consumer<? super E> action) {
             Node<E> p; int n;
             if (action == null) throw new NullPointerException();
             if ((n = getEst()) > 0 && (p = current) != null) {
+                // 消费分隔器中剩余元素（|current=null|代表消费剩余所有元素）
                 current = null;
                 est = 0;
+                // 遍历分隔器中剩余元素，执行指定方法
                 do {
                     E e = p.item;
                     p = p.next;
                     action.accept(e);
                 } while (p != null && --n > 0);
             }
+            // 在使用分隔器过程中，原始容器不能再进行结构性修改
             if (list.modCount != expectedModCount)
                 throw new ConcurrentModificationException();
         }
 
+        // 消费分隔器中首个元素，执行指定方法
         public boolean tryAdvance(Consumer<? super E> action) {
             Node<E> p;
             if (action == null) throw new NullPointerException();
             if (getEst() > 0 && (p = current) != null) {
                 --est;
                 E e = p.item;
+                // 设置下一次tryAdvance()的元素指针。即，当前元素被消费
                 current = p.next;
                 action.accept(e);
+                // 在使用分隔器过程中，原始容器不能再进行结构性修改
                 if (list.modCount != expectedModCount)
                     throw new ConcurrentModificationException();
                 return true;
@@ -1254,7 +1427,12 @@ public class LinkedList<E>
             return false;
         }
 
+        // 分隔器特征
         public int characteristics() {
+            // ORDERED表示该分隔器的迭代顺序是按照原本容器中的顺序
+            // SIZED表示该分隔器的大小是有限的
+            // SUBSIZED表示该分隔器所分割得到的子分隔器也是有限的
+            // 注：因为原始分隔器（父分隔器）是基于LinkedList的有序列表容器，故以上三个特征容易推出
             return Spliterator.ORDERED | Spliterator.SIZED | Spliterator.SUBSIZED;
         }
     }

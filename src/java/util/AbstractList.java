@@ -482,6 +482,8 @@ public abstract class AbstractList<E> extends AbstractCollection<E> implements L
      *         {@code (fromIndex > toIndex)}
      */
     public List<E> subList(int fromIndex, int toIndex) {
+        // 区分实现的容器类是否可高效的进行随机访问，从而可判断返回的子列表视图是否具有可高效的进行随机访问
+        // 注：能高效随机访问的类如ArrayList，而LinkedList则只能高效的进行顺序访问
         return (this instanceof RandomAccess ?
                 new RandomAccessSubList<>(this, fromIndex, toIndex) :
                 new SubList<>(this, fromIndex, toIndex));
@@ -782,6 +784,7 @@ class SubList<E> extends AbstractList<E> {
 }
 
 // 可随机访问的列表容器类，相比SubList，它打上了RandomAccess标记接口
+// 注：能高效随机访问的类如ArrayList，而LinkedList则只能高效的进行顺序访问
 class RandomAccessSubList<E> extends SubList<E> implements RandomAccess {
     RandomAccessSubList(AbstractList<E> list, int fromIndex, int toIndex) {
         super(list, fromIndex, toIndex);

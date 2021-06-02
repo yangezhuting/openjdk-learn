@@ -66,6 +66,7 @@ package java.util;
  * @since 1.2
  */
 
+// 使用列表迭代器实现了AbstractList中与位置相关的接口。让不支持高效随机访问的容器的实现类不用再关心与位置相关的接口，如LinkedList
 public abstract class AbstractSequentialList<E> extends AbstractList<E> {
     /**
      * Sole constructor.  (For invocation by subclass constructors, typically

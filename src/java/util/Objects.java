@@ -198,6 +198,7 @@ public final class Objects {
      * @return {@code obj} if not {@code null}
      * @throws NullPointerException if {@code obj} is {@code null}
      */
+    // 对象非null检测，若为null抛出NullPointerException异常
     public static <T> T requireNonNull(T obj) {
         if (obj == null)
             throw new NullPointerException();
@@ -223,6 +224,7 @@ public final class Objects {
      * @return {@code obj} if not {@code null}
      * @throws NullPointerException if {@code obj} is {@code null}
      */
+    // 对象非null检测，若为null抛出指定消息的NullPointerException异常
     public static <T> T requireNonNull(T obj, String message) {
         if (obj == null)
             throw new NullPointerException(message);
@@ -285,6 +287,7 @@ public final class Objects {
      * @throws NullPointerException if {@code obj} is {@code null}
      * @since 1.8
      */
+    // 对象非null检测，若为null抛出指定消息的NullPointerException异常
     public static <T> T requireNonNull(T obj, Supplier<String> messageSupplier) {
         if (obj == null)
             throw new NullPointerException(messageSupplier.get());

@@ -172,8 +172,10 @@ public final class Spliterators {
      *         {@code toIndex} is greater than the array size
      * @see Arrays#spliterator(Object[], int, int)
      */
+    // 基于数组创建一个分隔器
     public static <T> Spliterator<T> spliterator(Object[] array, int fromIndex, int toIndex,
                                                  int additionalCharacteristics) {
+        // 越界检测。|toIndex|是一个超尾索引，范围是[origin, array.length]
         checkFromToBounds(Objects.requireNonNull(array).length, fromIndex, toIndex);
         return new ArraySpliterator<>(array, fromIndex, toIndex, additionalCharacteristics);
     }
@@ -382,6 +384,7 @@ public final class Spliterators {
      * the end index, if the start index is negative, or the end index is
      * greater than the array length
      */
+    // 越界检测。|fence|是一个超尾索引，范围是[origin, arrayLength]
     private static void checkFromToBounds(int arrayLength, int origin, int fence) {
         if (origin > fence) {
             throw new ArrayIndexOutOfBoundsException(
@@ -889,6 +892,8 @@ public final class Spliterators {
      * A Spliterator designed for use by sources that traverse and split
      * elements maintained in an unmodifiable {@code Object[]} array.
      */
+    // 基于数组的分隔器
+    // 算法核心是对容器进行二分切割。场景：将大数据反复“裂变”成一系列小数据。多应用在stream流处理中
     static final class ArraySpliterator<T> implements Spliterator<T> {
         /**
          * The array, explicitly typed as Object[]. Unlike in some other
@@ -897,9 +902,13 @@ public final class Spliterators {
          * so long as no methods write into the array or serialize it,
          * which we ensure here by defining this class as final.
          */
+        // 原始数组的引用
         private final Object[] array;
+        // 分隔器的起始索引
         private int index;        // current index, modified on advance/split
+        // 分隔器的中含有元素个数，也是一个超尾索引（one past last index）
         private final int fence;  // one past last index
+        // 分隔器特征
         private final int characteristics;
 
         /**
@@ -926,9 +935,14 @@ public final class Spliterators {
             this.array = array;
             this.index = origin;
             this.fence = fence;
+            // SIZED表示该分隔器的大小是有限的
+            // SUBSIZED表示该分隔器所分割得到的子分隔器也是有序的
+            // 注：因为原始分隔器（父分隔器）是基于数组的有序线性容器，故以下两个特征容易推出
             this.characteristics = additionalCharacteristics | Spliterator.SIZED | Spliterator.SUBSIZED;
         }
 
+        // 二分切割分隔器，返回的新分隔器起始索引等于原始分隔器，结尾索引是原始容器的二分之一；而原始分隔器的起始索引被重置为二分之一
+        // 即：切分后，原始的分隔器引用后一半数据，返回的新分隔器引用前一半数据
         @Override
         public Spliterator<T> trySplit() {
             int lo = index, mid = (lo + fence) >>> 1;
@@ -937,23 +951,28 @@ public final class Spliterators {
                    : new ArraySpliterator<>(array, lo, index = mid, characteristics);
         }
 
+        // 消费分隔器中剩余元素，执行指定方法
         @SuppressWarnings("unchecked")
         @Override
         public void forEachRemaining(Consumer<? super T> action) {
             Object[] a; int i, hi; // hoist accesses and checks from loop
             if (action == null)
                 throw new NullPointerException();
+            // 消费分隔器中剩余元素（|index=hi|代表消费剩余所有元素）
             if ((a = array).length >= (hi = fence) &&
                 (i = index) >= 0 && i < (index = hi)) {
+                // 遍历分隔器中剩余元素，执行指定方法
                 do { action.accept((T)a[i]); } while (++i < hi);
             }
         }
 
+        // 消费分隔器中首个元素，执行指定方法
         @Override
         public boolean tryAdvance(Consumer<? super T> action) {
             if (action == null)
                 throw new NullPointerException();
             if (index >= 0 && index < fence) {
+                // |index++|表示设置下一次tryAdvance()的元素索引。即，当前元素被消费
                 @SuppressWarnings("unchecked") T e = (T) array[index++];
                 action.accept(e);
                 return true;
@@ -961,6 +980,7 @@ public final class Spliterators {
             return false;
         }
 
+        // 评估剩余元素数量的大小
         @Override
         public long estimateSize() { return (long)(fence - index); }
 
@@ -971,6 +991,9 @@ public final class Spliterators {
 
         @Override
         public Comparator<? super T> getComparator() {
+            // 1. 如果是SORTED，则返回该分隔器的数据源的Comparator
+            // 2. 如果是按照自然顺序排序的，则返回null
+            // 3. 如果不是SORTED的，默认抛出IllegalStateException
             if (hasCharacteristics(Spliterator.SORTED))
                 return null;
             throw new IllegalStateException();
