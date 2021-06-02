@@ -1442,7 +1442,7 @@ public class ArrayList<E> extends AbstractList<E>
      * @return a {@code Spliterator} over the elements in this list
      * @since 1.8
      */
-    // 获取ArrayList容器的分隔器对象实例。用于Stream流中
+    // 获取ArrayList容器的分割器对象实例。用于Stream流中
     @Override
     public Spliterator<E> spliterator() {
         return new ArrayListSpliterator<>(this, 0, -1, 0);
@@ -1450,7 +1450,7 @@ public class ArrayList<E> extends AbstractList<E>
 
     /** Index-based split-by-two, lazily initialized Spliterator */
     // 算法核心是对容器进行二分切割。场景：将大数据反复“裂变”成一系列小数据。多应用在stream流处理中
-    // 注：分隔器是一种特殊的迭代器
+    // 注：分割器是一种特殊的迭代器
     static final class ArrayListSpliterator<E> implements Spliterator<E> {
 
         /*
@@ -1487,12 +1487,12 @@ public class ArrayList<E> extends AbstractList<E>
 
         // 原始容器的引用
         private final ArrayList<E> list;
-        // 分隔器的起始索引，也是分隔器的正向消费元素进度索引
+        // 分割器的起始索引，也是分割器的正向消费元素进度索引
         private int index; // current index, modified on advance/split
-        // 分隔器的中含有元素个数，也是一个超尾索引（one past last index）
+        // 分割器的中含有元素个数，也是一个超尾索引（one past last index）
         private int fence; // -1 until used; then one past last index
-        // 第一次分隔、消费分隔器时，立即保存原始容器的修改次数。在使用分隔器过程中，原始容器不能再进行结构性修改
-        // 注：modCount属性字段非常重要，可以有效的防止分隔器非法访问的问题
+        // 第一次分割、消费分隔器时，立即保存原始容器的修改次数。在使用分割器过程中，原始容器不能再进行结构性修改
+        // 注：modCount属性字段非常重要，可以有效的防止分割器非法访问的问题
         private int expectedModCount; // initialized when fence set
 
         /** Create new spliterator covering the given  range */
@@ -1504,8 +1504,8 @@ public class ArrayList<E> extends AbstractList<E>
             this.expectedModCount = expectedModCount;
         }
 
-        // 获取分隔器的中含有元素个数。首个分隔器首次调用 getFence() 时 fence==-1，将其设置为原始容器的长度
-        // 注：区分首个分隔器，是因为分隔器在使用过程中会不停的二分递归切分
+        // 获取分割器的中含有元素个数。首个分隔器首次调用 getFence() 时 fence==-1，将其设置为原始容器的长度
+        // 注：区分首个分割器，是因为分割器在使用过程中会不停的二分递归切分
         private int getFence() { // initialize fence to size on first use
             int hi; // (a specialized variant appears in method forEach)
             ArrayList<E> lst;
@@ -1513,8 +1513,8 @@ public class ArrayList<E> extends AbstractList<E>
                 if ((lst = list) == null)
                     hi = fence = 0;
                 else {
-                    // 第一次使用分隔器时，立即保存原始容器的修改次数。在使用分隔器过程中，原始容器不能再进行结构性修改
-                    // 注：modCount属性字段非常重要，可以有效的防止分隔器非法访问的问题
+                    // 第一次使用分割器时，立即保存原始容器的修改次数。在使用分割器过程中，原始容器不能再进行结构性修改
+                    // 注：modCount属性字段非常重要，可以有效的防止分割器非法访问的问题
                     expectedModCount = lst.modCount;
                     hi = fence = lst.size;
                 }
@@ -1522,17 +1522,17 @@ public class ArrayList<E> extends AbstractList<E>
             return hi;
         }
 
-        // 二分切割分隔器，返回的新分隔器起始索引等于原始分隔器，结尾索引是原始容器的二分之一；而原始分隔器的起始索引被重置为二分之一
-        // 即：切分后，原始的分隔器引用后一半数据，返回的新分隔器引用前一半数据
+        // 二分切割分割器，返回的新分割器起始索引等于原始分隔器，结尾索引是原始容器的二分之一；而原始分割器的起始索引被重置为二分之一
+        // 即：切分后，原始的分割器引用后一半数据，返回的新分割器引用前一半数据
         public ArrayListSpliterator<E> trySplit() {
-            // 分隔器中剩余的元素个数
+            // 分割器中剩余的元素个数
             int hi = getFence(), lo = index, mid = (lo + hi) >>> 1;
             return (lo >= mid) ? null : // divide range in half unless too small
                 new ArrayListSpliterator<E>(list, lo, index = mid,
                                             expectedModCount);
         }
 
-        // 消费分隔器中首个元素，执行指定方法
+        // 消费分割器中首个元素，执行指定方法
         public boolean tryAdvance(Consumer<? super E> action) {
             if (action == null)
                 throw new NullPointerException();
@@ -1542,7 +1542,7 @@ public class ArrayList<E> extends AbstractList<E>
                 index = i + 1;
                 @SuppressWarnings("unchecked") E e = (E)list.elementData[i];
                 action.accept(e);
-                // 在使用分隔器过程中，原始容器不能再进行结构性修改
+                // 在使用分割器过程中，原始容器不能再进行结构性修改
                 if (list.modCount != expectedModCount)
                     throw new ConcurrentModificationException();
                 return true;
@@ -1550,7 +1550,7 @@ public class ArrayList<E> extends AbstractList<E>
             return false;
         }
 
-        // 消费分隔器中剩余元素，执行指定方法
+        // 消费分割器中剩余元素，执行指定方法
         public void forEachRemaining(Consumer<? super E> action) {
             int i, hi, mc; // hoist accesses and checks from loop
             ArrayList<E> lst; Object[] a;
@@ -1558,8 +1558,8 @@ public class ArrayList<E> extends AbstractList<E>
                 throw new NullPointerException();
             // 获取原始容器的元素
             if ((lst = list) != null && (a = lst.elementData) != null) {
-                // 获取结束索引hi。首个分隔器首次时fence==-1，将其设置为原始容器的结尾索引
-                // 注：区分首个分隔器，是因为分隔器在使用过程中会不停的二分递归切分
+                // 获取结束索引hi。首个分割器首次时fence==-1，将其设置为原始容器的结尾索引
+                // 注：区分首个分隔器，是因为分割器在使用过程中会不停的二分递归切分
                 if ((hi = fence) < 0) {
                     mc = lst.modCount;
                     hi = lst.size;
@@ -1568,7 +1568,7 @@ public class ArrayList<E> extends AbstractList<E>
                     mc = expectedModCount;
                 // 消费分隔器中剩余元素（|index=hi|代表消费剩余所有元素）
                 if ((i = index) >= 0 && (index = hi) <= a.length) {
-                    // 遍历分隔器中剩余元素，执行指定方法
+                    // 遍历分割器中剩余元素，执行指定方法
                     for (; i < hi; ++i) {
                         @SuppressWarnings("unchecked") E e = (E) a[i];
                         action.accept(e);
@@ -1578,7 +1578,7 @@ public class ArrayList<E> extends AbstractList<E>
                         return;
                 }
             }
-            // 在使用分隔器过程中，原始容器不能再进行结构性修改
+            // 在使用分割器过程中，原始容器不能再进行结构性修改
             throw new ConcurrentModificationException();
         }
 
@@ -1587,12 +1587,12 @@ public class ArrayList<E> extends AbstractList<E>
             return (long) (getFence() - index);
         }
         
-        // 分隔器特征
+        // 分割器特征
         public int characteristics() {
-            // ORDERED表示该分隔器的迭代顺序是按照原本容器中的顺序
-            // SIZED表示该分隔器的大小是有限的
-            // SUBSIZED表示该分隔器所分割得到的子分隔器也是有限的
-            // 注：因为原始分隔器（父分隔器）是基于ArrayList的有序列表容器，故以上三个特征容易推出
+            // ORDERED表示该分割器的迭代顺序是按照原本容器中的顺序
+            // SIZED表示该分割器的大小是有限的
+            // SUBSIZED表示该分割器所分割得到的子分隔器也是有限的
+            // 注：因为原始分割器（父分割器）是基于ArrayList的有序列表容器，故以上三个特征容易推出
             return Spliterator.ORDERED | Spliterator.SIZED | Spliterator.SUBSIZED;
         }
     }

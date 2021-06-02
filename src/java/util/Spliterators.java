@@ -38,6 +38,7 @@ import java.util.function.LongConsumer;
  * @see Spliterator
  * @since 1.8
  */
+// 分割器伴随类
 public final class Spliterators {
 
     // Suppresses default constructor, ensuring non-instantiability.
@@ -137,6 +138,7 @@ public final class Spliterators {
      * @throws NullPointerException if the given array is {@code null}
      * @see Arrays#spliterator(Object[])
      */
+    // 基于数组创建一个分割器
     public static <T> Spliterator<T> spliterator(Object[] array,
                                                  int additionalCharacteristics) {
         return new ArraySpliterator<>(Objects.requireNonNull(array),
@@ -172,7 +174,7 @@ public final class Spliterators {
      *         {@code toIndex} is greater than the array size
      * @see Arrays#spliterator(Object[], int, int)
      */
-    // 基于数组创建一个分隔器
+    // 基于数组创建一个分割器
     public static <T> Spliterator<T> spliterator(Object[] array, int fromIndex, int toIndex,
                                                  int additionalCharacteristics) {
         // 越界检测。|toIndex|是一个超尾索引，范围是[origin, array.length]

@@ -1307,7 +1307,7 @@ public class LinkedList<E>
      * @return a {@code Spliterator} over the elements in this list
      * @since 1.8
      */
-    // 获取LinkedList容器的分隔器对象实例。用于Stream流中
+    // 获取LinkedList容器的分割器对象实例。用于Stream流中
     @Override
     public Spliterator<E> spliterator() {
         return new LLSpliterator<E>(this, -1, 0);
@@ -1316,20 +1316,20 @@ public class LinkedList<E>
     /** A customized variant of Spliterators.IteratorSpliterator */
     // 算法核心是对容器按指数级数量进行切割。场景：将大数据反复“裂变”成一系列的小数据。多应用在stream流处理中
     // 注：切割容器时，切割数量从|1<<10|开始，每切割一次，数量增加一倍（即，切割得到的ArraySpliterator中元素增加一倍），最大切割的数量为|1<<25|
-    // 注：分隔器是一种特殊的迭代器
+    // 注：分割器是一种特殊的迭代器
     static final class LLSpliterator<E> implements Spliterator<E> {
         static final int BATCH_UNIT = 1 << 10;  // batch array size increment
         static final int MAX_BATCH = 1 << 25;  // max batch array size;
         // 原始容器的引用
         final LinkedList<E> list; // null OK unless traversed
-        // 分隔器的起始节点的指针
+        // 分割器的起始节点的指针
         Node<E> current;      // current node; null until initialized
-        // 分隔器的中含有元素个数
+        // 分割器的中含有元素个数
         int est;              // size estimate; -1 until first needed
-        // 第一次分隔、消费分隔器时，立即保存原始容器的修改次数。在使用分隔器过程中，原始容器不能再进行结构性修改
-        // 注：modCount属性字段非常重要，可以有效的防止分隔器非法访问的问题
+        // 第一次分隔、消费分割器时，立即保存原始容器的修改次数。在使用分割器过程中，原始容器不能再进行结构性修改
+        // 注：modCount属性字段非常重要，可以有效的防止分割器非法访问的问题
         int expectedModCount; // initialized when est set
-        // 分隔容器是切割数量
+        // 分割容器是切割数量
         int batch;            // batch size for splits
 
         LLSpliterator(LinkedList<E> list, int est, int expectedModCount) {
@@ -1338,8 +1338,8 @@ public class LinkedList<E>
             this.expectedModCount = expectedModCount;
         }
 
-        // 获取分隔器的中含有元素个数。原始分隔器首次调用 getEst() 时 est==-1，将其设置为原始容器的长度
-        // 注：仅区分原始分隔器，是因为trySplit()返回了Spliterators.ArraySpliterator分隔器，其再次分隔是不会调用getEst()方法
+        // 获取分割器的中含有元素个数。原始分割器首次调用 getEst() 时 est==-1，将其设置为原始容器的长度
+        // 注：仅区分原始分割器，是因为trySplit()返回了Spliterators.ArraySpliterator分割器，其再次分隔是不会调用getEst()方法
         final int getEst() {
             int s; // force initialization
             final LinkedList<E> lst;
@@ -1347,8 +1347,8 @@ public class LinkedList<E>
                 if ((lst = list) == null)
                     s = est = 0;
                 else {
-                    // 第一次使用分隔器时，立即保存原始容器的修改次数。在使用分隔器过程中，原始容器不能再进行结构性修改
-                    // 注：modCount属性字段非常重要，可以有效的防止分隔器非法访问的问题
+                    // 第一次使用分割器时，立即保存原始容器的修改次数。在使用分割器过程中，原始容器不能再进行结构性修改
+                    // 注：modCount属性字段非常重要，可以有效的防止分割器非法访问的问题
                     expectedModCount = lst.modCount;
                     current = lst.first;
                     s = est = lst.size;
@@ -1360,8 +1360,8 @@ public class LinkedList<E>
         // 评估剩余元素数量的大小
         public long estimateSize() { return (long) getEst(); }
 
-        // 按指数级数量进行切割分隔器，返回的新分隔器包含元素按指数级增长；而原始分隔器按指数级数量向后缩短
-        // 即：切分后，原始的分隔器引用后面数据(LinkedList.LLSpliterator)；返回的新分隔器引用后面的数据(Spliterators.ArraySpliterator)
+        // 按指数级数量进行切割分割器，返回的新分割器包含元素按指数级增长；而原始分割器按指数级数量向后缩短
+        // 即：切分后，原始的分割器引用后面数据(LinkedList.LLSpliterator)；返回的新分割器引用后面的数据(Spliterators.ArraySpliterator)
         public Spliterator<E> trySplit() {
             Node<E> p;
             // 分隔器中剩余的元素个数
@@ -1373,43 +1373,43 @@ public class LinkedList<E>
                     n = s;
                 if (n > MAX_BATCH)
                     n = MAX_BATCH;
-                // 存放本次分隔数据至数组容器中，分隔的前面部分
+                // 存放本次分割数据至数组容器中，分隔的前面部分
                 Object[] a = new Object[n];
                 int j = 0;
                 do { a[j++] = p.item; } while ((p = p.next) != null && j < n);
-                // 设置当前分隔器为新的起始点
+                // 设置当前分割器为新的起始点
                 current = p;
                 // 下一次分隔数量的增量，指数级增长算法
                 batch = j;
                 est = s - j;
-                // 返回数组分隔迭代器Spliterators.ArraySpliterator对象实例
-                // 注：ORDERED表示该子分隔器的迭代顺序是按照原本容器中的顺序
+                // 返回数组分割迭代器Spliterators.ArraySpliterator对象实例
+                // 注：ORDERED表示该子分割器的迭代顺序是按照原本容器中的顺序
                 return Spliterators.spliterator(a, 0, j, Spliterator.ORDERED);
             }
             return null;
         }
 
-        // 消费分隔器中剩余元素，执行指定方法
+        // 消费分割器中剩余元素，执行指定方法
         public void forEachRemaining(Consumer<? super E> action) {
             Node<E> p; int n;
             if (action == null) throw new NullPointerException();
             if ((n = getEst()) > 0 && (p = current) != null) {
-                // 消费分隔器中剩余元素（|current=null|代表消费剩余所有元素）
+                // 消费分割器中剩余元素（|current=null|代表消费剩余所有元素）
                 current = null;
                 est = 0;
-                // 遍历分隔器中剩余元素，执行指定方法
+                // 遍历分割器中剩余元素，执行指定方法
                 do {
                     E e = p.item;
                     p = p.next;
                     action.accept(e);
                 } while (p != null && --n > 0);
             }
-            // 在使用分隔器过程中，原始容器不能再进行结构性修改
+            // 在使用分割器过程中，原始容器不能再进行结构性修改
             if (list.modCount != expectedModCount)
                 throw new ConcurrentModificationException();
         }
 
-        // 消费分隔器中首个元素，执行指定方法
+        // 消费分割器中首个元素，执行指定方法
         public boolean tryAdvance(Consumer<? super E> action) {
             Node<E> p;
             if (action == null) throw new NullPointerException();
@@ -1419,7 +1419,7 @@ public class LinkedList<E>
                 // 设置下一次tryAdvance()的元素指针。即，当前元素被消费
                 current = p.next;
                 action.accept(e);
-                // 在使用分隔器过程中，原始容器不能再进行结构性修改
+                // 在使用分割器过程中，原始容器不能再进行结构性修改
                 if (list.modCount != expectedModCount)
                     throw new ConcurrentModificationException();
                 return true;
@@ -1427,12 +1427,12 @@ public class LinkedList<E>
             return false;
         }
 
-        // 分隔器特征
+        // 分割器特征
         public int characteristics() {
-            // ORDERED表示该分隔器的迭代顺序是按照原本容器中的顺序
-            // SIZED表示该分隔器的大小是有限的
-            // SUBSIZED表示该分隔器所分割得到的子分隔器也是有限的
-            // 注：因为原始分隔器（父分隔器）是基于LinkedList的有序列表容器，故以上三个特征容易推出
+            // ORDERED表示该分割器的迭代顺序是按照原本容器中的顺序
+            // SIZED表示该分割器的大小是有限的
+            // SUBSIZED表示该分割器所分割得到的子分割器也是有限的
+            // 注：因为原始分割器（父分割器）是基于LinkedList的有序列表容器，故以上三个特征容易推出
             return Spliterator.ORDERED | Spliterator.SIZED | Spliterator.SUBSIZED;
         }
     }
