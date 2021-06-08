@@ -82,6 +82,21 @@ import java.util.function.Consumer;
  * @since   1.6
  * @param <E> the type of elements held in this collection
  */
+// 可高效的进行插入、删除的双端队列结构。实现了 Deque,Queue 接口
+// 注：与LinkedList相比，随机访问效率更高，但频繁的插入、删除效率欠佳，因为这可能会导致底层数组的扩容（内存要重新分配及拷贝）
+//
+// @coding
+// +-------------------+------------------+------------------+
+// |  tail--->         |    free memory   |        <---head  |
+// +-------------------+------------------+------------------+
+// @coding
+// 1. 添加元素addFirst()，元素的|head|索引从大到小增长
+// 2. 添加元素addLast()，元素的|tail|索引从小到大增长
+// 3. 同一时间，最好只以一种方式使用该容器（比如：先进先出的队列、先进后出的栈），理由是：
+//      1）在某些接口中，|head|与|tail|遍历是单向的。不同方式添加的元素，必须以不同方式访问。比如 getFirst()/getLast()/peekFirst()
+//      2）peekFirst/peekLast，两个方法中，后者遍历可以进行"环形"访问。这是不一致的BUG吗？
+//      3）注：还是不同方式添加的元素，使用pollLast/removeLast/xxxLast...接口来遍历元素
+// 注：容器有很多方法，都有将访问索引和|elements.length-1|相与操作，这使得访问索引在超过容器的容量后自动从头开始
 public class ArrayDeque<E> extends AbstractCollection<E>
                            implements Deque<E>, Cloneable, Serializable
 {
@@ -95,6 +110,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * other.  We also guarantee that all array cells not holding
      * deque elements are always null.
      */
+    // 实际元素存储容器
     transient Object[] elements; // non-private to simplify nested class access
 
     /**
@@ -102,18 +118,21 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * element that would be removed by remove() or pop()); or an
      * arbitrary number equal to tail if the deque is empty.
      */
+    // head指向末端索引。增加元素时，索引向前增长，即元素插入"头部"
     transient int head;
 
     /**
      * The index at which the next element would be added to the tail
      * of the deque (via addLast(E), add(E), or push(E)).
      */
+    // tail从起始索引开始。增加元素时，索引向后增长，即元素插入"尾部"
     transient int tail;
 
     /**
      * The minimum capacity that we'll use for a newly created deque.
      * Must be a power of 2.
      */
+    // 队列最小的容量
     private static final int MIN_INITIAL_CAPACITY = 8;
 
     // ******  Array allocation and resizing utilities ******
@@ -123,19 +142,23 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      *
      * @param numElements  the number of elements to hold
      */
+    // 分配大于|numElements|的最小2的幂次方个数组内存
     private void allocateElements(int numElements) {
         int initialCapacity = MIN_INITIAL_CAPACITY;
         // Find the best power of two to hold elements.
         // Tests "<=" because arrays aren't kept full.
         if (numElements >= initialCapacity) {
+            // 将|numElements|最高位为1之后的所有位都置1
             initialCapacity = numElements;
             initialCapacity |= (initialCapacity >>>  1);
             initialCapacity |= (initialCapacity >>>  2);
             initialCapacity |= (initialCapacity >>>  4);
             initialCapacity |= (initialCapacity >>>  8);
             initialCapacity |= (initialCapacity >>> 16);
+            // 将所有位为1的整型自增1，可得到大于|numElements|的最小的2的幂次方
             initialCapacity++;
 
+            // 溢出有符号的整型，向左移一为得2^30
             if (initialCapacity < 0)   // Too many elements, must back off
                 initialCapacity >>>= 1;// Good luck allocating 2 ^ 30 elements
         }
@@ -146,18 +169,25 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * Doubles the capacity of this deque.  Call only when full, i.e.,
      * when head and tail have wrapped around to become equal.
      */
+    // 自动扩容，底层的数组长度增加 1 倍。长度总是 2 的幂次方
+    // 注：原始数据将被拷贝到新内存的左半部分
     private void doubleCapacity() {
+        // 容量必须已使用完全
         assert head == tail;
         int p = head;
         int n = elements.length;
         int r = n - p; // number of elements to the right of p
+        // 长度增加 1 倍
         int newCapacity = n << 1;
         if (newCapacity < 0)
             throw new IllegalStateException("Sorry, deque too big");
         Object[] a = new Object[newCapacity];
+        // 拷贝原始数据到新内存的左半部分
+        // 先拷贝原始数据的尾部部分到新内存起始索引，再拷贝原始数据的头部部分到后续的新内存地址上
         System.arraycopy(elements, p, a, 0, r);
         System.arraycopy(elements, 0, a, r, p);
         elements = a;
+        // head置为0，添加数据方法中，(head-1) & (elements.length-1)可得最大索引值
         head = 0;
         tail = n;
     }
@@ -169,10 +199,14 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      *
      * @return its argument
      */
+    // 拷贝队列数据至数组|a|中。注：数组|a|内存必须足够大
     private <T> T[] copyElements(T[] a) {
         if (head < tail) {
+            // 按顺序将元素从队列复制到指定的|a|数组中
+            // 注：此分支下，当前队列的状态只能是：|head==0| 且 |tail>0|，即可能刚调用过doubleCapacity()方法
             System.arraycopy(elements, head, a, 0, size());
         } else if (head > tail) {
+            // 先拷贝原始数据的尾部部分到新内存起始索引，再拷贝原始数据的头部部分到后续的新内存地址上
             int headPortionLen = elements.length - head;
             System.arraycopy(elements, head, a, 0, headPortionLen);
             System.arraycopy(elements, 0, a, headPortionLen, tail);
@@ -184,6 +218,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * Constructs an empty array deque with an initial capacity
      * sufficient to hold 16 elements.
      */
+    // 默认构造容量为16的双端队列
     public ArrayDeque() {
         elements = new Object[16];
     }
@@ -194,6 +229,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      *
      * @param numElements  lower bound on initial capacity of the deque
      */
+    // 构造一个容量为大于|numElements|的最小2的幂次方个数组的双端队列
     public ArrayDeque(int numElements) {
         allocateElements(numElements);
     }
@@ -208,7 +244,9 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @param c the collection whose elements are to be placed into the deque
      * @throws NullPointerException if the specified collection is null
      */
+    // 将容器|c|中的所有元素添加到当前容器，底层反复调用add()方法，将元素插入"尾部"
     public ArrayDeque(Collection<? extends E> c) {
+        // 分配大于|c.size()|的最小2的幂次方个数组
         allocateElements(c.size());
         addAll(c);
     }
@@ -223,10 +261,13 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @param e the element to add
      * @throws NullPointerException if the specified element is null
      */
+    // 添加的元素|e|的索引从大到小增长，向前增长，即元素插入"头部"
     public void addFirst(E e) {
         if (e == null)
             throw new NullPointerException();
+        // 从末端索引开始添加元素。当|head|值为0时，与|elements.length-1|相与可得到最大容量的索引值
         elements[head = (head - 1) & (elements.length - 1)] = e;
+        // 自动扩容，底层的数组长度增加 1 倍。长度总是 2 的幂次方
         if (head == tail)
             doubleCapacity();
     }
@@ -239,10 +280,13 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @param e the element to add
      * @throws NullPointerException if the specified element is null
      */
+    // 添加的元素|e|的索引从小到大增长，向后增长，即元素插入"尾部"
     public void addLast(E e) {
         if (e == null)
             throw new NullPointerException();
+        // 从起始索引开始添加元素
         elements[tail] = e;
+        // 自动扩容，底层的数组长度增加 1 倍。长度总是 2 的幂次方
         if ( (tail = (tail + 1) & (elements.length - 1)) == head)
             doubleCapacity();
     }
@@ -254,6 +298,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @return {@code true} (as specified by {@link Deque#offerFirst})
      * @throws NullPointerException if the specified element is null
      */
+    // 添加的元素|e|的索引从大到小增长，向前增长，即元素插入"头部"
     public boolean offerFirst(E e) {
         addFirst(e);
         return true;
@@ -266,6 +311,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @return {@code true} (as specified by {@link Deque#offerLast})
      * @throws NullPointerException if the specified element is null
      */
+    // 添加的元素|e|的索引从小到大增长，向后增长，即元素插入"尾部"
     public boolean offerLast(E e) {
         addLast(e);
         return true;
@@ -274,6 +320,8 @@ public class ArrayDeque<E> extends AbstractCollection<E>
     /**
      * @throws NoSuchElementException {@inheritDoc}
      */
+    // 从队列中删除头元素，并返回头元素
+    // 注：链表无元素，立即抛出异常
     public E removeFirst() {
         E x = pollFirst();
         if (x == null)
@@ -284,6 +332,8 @@ public class ArrayDeque<E> extends AbstractCollection<E>
     /**
      * @throws NoSuchElementException {@inheritDoc}
      */
+    // 从队列中删除尾元素，并返回尾元素
+    // 注：链表无元素，立即抛出异常
     public E removeLast() {
         E x = pollLast();
         if (x == null)
@@ -291,6 +341,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
         return x;
     }
 
+    // 从队列中删除头元素，并返回头元素
     public E pollFirst() {
         int h = head;
         @SuppressWarnings("unchecked")
@@ -298,17 +349,21 @@ public class ArrayDeque<E> extends AbstractCollection<E>
         // Element is null if deque empty
         if (result == null)
             return null;
+        // 清除引用
         elements[h] = null;     // Must null out slot
+        // 删除该头元素
         head = (h + 1) & (elements.length - 1);
         return result;
     }
 
+    // 从队列中删除尾元素，并返回尾元素
     public E pollLast() {
         int t = (tail - 1) & (elements.length - 1);
         @SuppressWarnings("unchecked")
         E result = (E) elements[t];
         if (result == null)
             return null;
+        // 清除引用
         elements[t] = null;
         tail = t;
         return result;
@@ -317,6 +372,8 @@ public class ArrayDeque<E> extends AbstractCollection<E>
     /**
      * @throws NoSuchElementException {@inheritDoc}
      */
+    // 获取队列中的头元素
+    // 注：空队列，抛出异常
     public E getFirst() {
         @SuppressWarnings("unchecked")
         E result = (E) elements[head];
@@ -328,6 +385,8 @@ public class ArrayDeque<E> extends AbstractCollection<E>
     /**
      * @throws NoSuchElementException {@inheritDoc}
      */
+    // 获取队列中的尾元素
+    // 注：空队列，抛出异常
     public E getLast() {
         @SuppressWarnings("unchecked")
         E result = (E) elements[(tail - 1) & (elements.length - 1)];
@@ -336,12 +395,16 @@ public class ArrayDeque<E> extends AbstractCollection<E>
         return result;
     }
 
+    // 获取队列中的头元素
+    // 注：空队列，返回null
     @SuppressWarnings("unchecked")
     public E peekFirst() {
         // elements[head] is null if deque empty
         return (E) elements[head];
     }
 
+    // 获取队列中的尾元素
+    // 注：空队列，返回null
     @SuppressWarnings("unchecked")
     public E peekLast() {
         return (E) elements[(tail - 1) & (elements.length - 1)];
@@ -359,6 +422,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @param o element to be removed from this deque, if present
      * @return {@code true} if the deque contained the specified element
      */
+    // 删除容器中第一个等于对象|o|的元素。元素不存在，返回false
     public boolean removeFirstOccurrence(Object o) {
         if (o == null)
             return false;
@@ -387,6 +451,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @param o element to be removed from this deque, if present
      * @return {@code true} if the deque contained the specified element
      */
+    // 删除容器中逆向的第一个等于对象|o|的元素。元素不存在，返回false
     public boolean removeLastOccurrence(Object o) {
         if (o == null)
             return false;
@@ -414,6 +479,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @return {@code true} (as specified by {@link Collection#add})
      * @throws NullPointerException if the specified element is null
      */
+    // 添加的元素|e|的索引从小到大增长，向后增长，即元素插入"尾部"
     public boolean add(E e) {
         addLast(e);
         return true;
@@ -428,6 +494,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @return {@code true} (as specified by {@link Queue#offer})
      * @throws NullPointerException if the specified element is null
      */
+    // 添加的元素|e|的索引从小到大增长，向后增长，即元素插入"尾部"
     public boolean offer(E e) {
         return offerLast(e);
     }
@@ -443,6 +510,8 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @return the head of the queue represented by this deque
      * @throws NoSuchElementException {@inheritDoc}
      */
+    // 从队列中删除头元素，并返回头元素
+    // 注：链表无元素，立即抛出异常
     public E remove() {
         return removeFirst();
     }
@@ -457,6 +526,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @return the head of the queue represented by this deque, or
      *         {@code null} if this deque is empty
      */
+    // 从队列中删除头元素，并返回头元素
     public E poll() {
         return pollFirst();
     }
@@ -471,6 +541,8 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @return the head of the queue represented by this deque
      * @throws NoSuchElementException {@inheritDoc}
      */
+    // 获取队列中的头元素
+    // 注：空队列，抛出异常
     public E element() {
         return getFirst();
     }
@@ -484,6 +556,8 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @return the head of the queue represented by this deque, or
      *         {@code null} if this deque is empty
      */
+    // 获取队列中的头元素
+    // 注：空队列，返回null
     public E peek() {
         return peekFirst();
     }
@@ -499,6 +573,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @param e the element to push
      * @throws NullPointerException if the specified element is null
      */
+    // 添加的元素|e|的索引从大到小增长，向前增长，即元素插入"头部"
     public void push(E e) {
         addFirst(e);
     }
@@ -513,6 +588,8 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      *         of the stack represented by this deque)
      * @throws NoSuchElementException {@inheritDoc}
      */
+    // 从队列中删除头元素，并返回头元素
+    // 注：链表无元素，立即抛出异常
     public E pop() {
         return removeFirst();
     }
@@ -535,7 +612,9 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      *
      * @return true if elements moved backwards
      */
+    // 将前后两段元素合并计数，删除索引|i|的元素
     private boolean delete(int i) {
+        // 检测索引
         checkInvariants();
         final Object[] elements = this.elements;
         final int mask = elements.length - 1;
@@ -602,10 +681,12 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      *
      * @return an iterator over the elements in this deque
      */
+    // 获取双端正向迭代器。即，从|head|开始
     public Iterator<E> iterator() {
         return new DeqIterator();
     }
 
+    // 获取双端逆向迭代器。即，从|tail|开始
     public Iterator<E> descendingIterator() {
         return new DescendingIterator();
     }
@@ -632,7 +713,9 @@ public class ArrayDeque<E> extends AbstractCollection<E>
             return cursor != fence;
         }
 
+        // 遍历容器中所有元素，有索引自动具有"环形"访问的效果
         public E next() {
+            // 迭代越界时，立即抛出异常。调用next()前，强烈建议先调用hasNext()
             if (cursor == fence)
                 throw new NoSuchElementException();
             @SuppressWarnings("unchecked")
@@ -642,20 +725,24 @@ public class ArrayDeque<E> extends AbstractCollection<E>
             if (tail != fence || result == null)
                 throw new ConcurrentModificationException();
             lastRet = cursor;
+            // 设置下一次next()迭代索引。索引具有"环形"效果
             cursor = (cursor + 1) & (elements.length - 1);
             return result;
         }
 
         public void remove() {
+            // 调用remove()前，需调用next()
             if (lastRet < 0)
                 throw new IllegalStateException();
             if (delete(lastRet)) { // if left-shifted, undo increment in next()
                 cursor = (cursor - 1) & (elements.length - 1);
                 fence = tail;
             }
+            // 将上一次迭代索引置为无效
             lastRet = -1;
         }
 
+        // 从当前迭代索引，批量遍历消费剩余的元素
         public void forEachRemaining(Consumer<? super E> action) {
             Objects.requireNonNull(action);
             Object[] a = elements;
@@ -663,6 +750,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
             cursor = f;
             while (i != f) {
                 @SuppressWarnings("unchecked") E e = (E)a[i];
+                // 获取下一次迭代索引。索引具有"环形"效果
                 i = (i + 1) & m;
                 if (e == null)
                     throw new ConcurrentModificationException();
@@ -671,6 +759,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
         }
     }
 
+    // 与DeqIter一致
     private class DescendingIterator implements Iterator<E> {
         /*
          * This class is nearly a mirror-image of DeqIterator, using
@@ -716,6 +805,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @param o object to be checked for containment in this deque
      * @return {@code true} if this deque contains the specified element
      */
+    // 查找对象|o|是否在列表中
     public boolean contains(Object o) {
         if (o == null)
             return false;
@@ -743,6 +833,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @param o element to be removed from this deque, if present
      * @return {@code true} if this deque contained the specified element
      */
+    // 删除容器中第一个等于对象|o|的元素。元素不存在，返回false
     public boolean remove(Object o) {
         return removeFirstOccurrence(o);
     }
@@ -751,6 +842,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * Removes all of the elements from this deque.
      * The deque will be empty after this call returns.
      */
+    // 清除队列中所有元素
     public void clear() {
         int h = head;
         int t = tail;
@@ -778,6 +870,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      *
      * @return an array containing all of the elements in this deque
      */
+    // 将列表容器中的数据转换成数组返回，这个方法返回的是Object[]的数组类型
     public Object[] toArray() {
         return copyElements(new Object[size()]);
     }
@@ -818,6 +911,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      *         this deque
      * @throws NullPointerException if the specified array is null
      */
+    // 将列表容器中的数据转换成数组返回，这个方法返回的是T[]的数组类型。当数组|a|长度足够时，直接使用它
     @SuppressWarnings("unchecked")
     public <T> T[] toArray(T[] a) {
         int size = size();
@@ -825,6 +919,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
             a = (T[])java.lang.reflect.Array.newInstance(
                     a.getClass().getComponentType(), size);
         copyElements(a);
+        // 将多余的数组元素置为null
         if (a.length > size)
             a[size] = null;
         return a;
@@ -901,10 +996,13 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      * @return a {@code Spliterator} over the elements in this deque
      * @since 1.8
      */
+    // 获取ArrayDeque容器的分割器对象实例。用于Stream流中
     public Spliterator<E> spliterator() {
         return new DeqSpliterator<E>(this, -1, -1);
     }
 
+    // 算法核心是对容器进行二分切割。场景：将大数据反复“裂变”成一系列小数据。多应用在stream流处理中
+    // 注：分割器是一种特殊的迭代器
     static final class DeqSpliterator<E> implements Spliterator<E> {
         private final ArrayDeque<E> deq;
         private int fence;  // -1 until first use

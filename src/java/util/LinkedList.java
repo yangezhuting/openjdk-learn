@@ -80,7 +80,9 @@ import java.util.function.Consumer;
  * @param <E> the type of elements held in this collection
  */
 
-// 可高效的进行插入、删除的列表结构。可作为队列结构（头尾操作）使用，用 List,Deque 标识
+// 可高效的进行插入、删除的列表结构；是一个双端队列结构（头尾操作）。实现了 List,Deque,Queue 接口
+// 注：虽然LinkedList列表也提供了随机访问接口，但效率低下，请不要使用。该容器没有实现RandomAccess接口
+// 注：与ArrayDeque相比，随机访问效率不高，但频繁的插入、删除效率会更佳，这也是链表存在的意义
 public class LinkedList<E>
     extends AbstractSequentialList<E>
     implements List<E>, Deque<E>, Cloneable, java.io.Serializable
@@ -1242,7 +1244,6 @@ public class LinkedList<E>
         Object[] result = a;
         for (Node<E> x = first; x != null; x = x.next)
             result[i++] = x.item;
-
         // 将多余的数组元素置为null
         if (a.length > size)
             a[size] = null;

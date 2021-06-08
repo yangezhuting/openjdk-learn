@@ -103,7 +103,8 @@ import java.util.function.UnaryOperator;
  * @since   1.2
  */
 
-// 可高效的进行随机访问（按索引访问）的列表结构，用 List,RandomAccess 标识
+// 可高效的进行随机访问（按索引访问）的列表结构。实现了 List,RandomAccess 接口
+// 注：与LinkedList相比，随机访问效率更高，但频繁的插入、删除效率欠佳，因为这可能会导致底层数组的扩容（内存要重新分配及拷贝）
 public class ArrayList<E> extends AbstractList<E>
         implements List<E>, RandomAccess, Cloneable, java.io.Serializable
 {
@@ -118,6 +119,7 @@ public class ArrayList<E> extends AbstractList<E>
     /**
      * Shared empty array instance used for empty instances.
      */
+    // 全局共享的空元素数组
     private static final Object[] EMPTY_ELEMENTDATA = {};
 
     /**
@@ -125,6 +127,7 @@ public class ArrayList<E> extends AbstractList<E>
      * distinguish this from EMPTY_ELEMENTDATA to know how much to inflate when
      * first element is added.
      */
+    // 默认构造的容器设置的全局共享的空元素数组
     private static final Object[] DEFAULTCAPACITY_EMPTY_ELEMENTDATA = {};
 
     /**
@@ -133,7 +136,7 @@ public class ArrayList<E> extends AbstractList<E>
      * empty ArrayList with elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA
      * will be expanded to DEFAULT_CAPACITY when the first element is added.
      */
-    // 比如 Object[] 可以存放任何对象，因为他是所有类的基类。注：数组也是对象
+    // 实际元素存储容器
     transient Object[] elementData; // non-private to simplify nested class access
 
     /**
@@ -156,8 +159,8 @@ public class ArrayList<E> extends AbstractList<E>
             // 申请指定容量的内存，全部元素被初始化为null
             this.elementData = new Object[initialCapacity];
         } else if (initialCapacity == 0) {
-            // 全局的空元素的数组。与 DEFAULTCAPACITY_EMPTY_ELEMENTDATA 区分开，是因为此处是用户手动指定了容量为0
-            // 区分开两者，主要是为了处理 DEFAULT_CAPACITY 默认容量。即：如果用户手动指定容量为0，则DEFAULT_CAPACITY将不再有效
+            // 全局的空元素的数组。与DEFAULTCAPACITY_EMPTY_ELEMENTDATA区分开，是因为此处是用户手动指定了容量为0
+            // 区分开两者，主要是为了处理DEFAULT_CAPACITY默认容量。即：如果用户手动指定容量为0，则DEFAULT_CAPACITY将不再有效
             this.elementData = EMPTY_ELEMENTDATA;
         } else {
             throw new IllegalArgumentException("Illegal Capacity: "+
@@ -188,7 +191,7 @@ public class ArrayList<E> extends AbstractList<E>
         if ((size = elementData.length) != 0) {
             // c.toArray might (incorrectly) not return Object[] (see 6260652)
             // 获取容器|c|中所有元素，类型通常为Object[].class
-            // 注：Arrays.asList()创建的列表，其c.toArray()返回的不是 Object[] 数组，而是 T[] 数组
+            // 注：Arrays.asList()创建的列表，其c.toArray()返回的不是Object[]数组，而是T[]数组
             if (elementData.getClass() != Object[].class)
                 elementData = Arrays.copyOf(elementData, size, Object[].class); // 将 T[] 类型的数组转换成 Object[]
         } else {
@@ -202,6 +205,7 @@ public class ArrayList<E> extends AbstractList<E>
      * list's current size.  An application can use this operation to minimize
      * the storage of an <tt>ArrayList</tt> instance.
      */
+    // 将容量缩小到实际元素个数
     public void trimToSize() {
         // 缩容时，需设置容器结构有变化的标志位
         modCount++;
@@ -283,7 +287,7 @@ public class ArrayList<E> extends AbstractList<E>
         if (newCapacity - minCapacity < 0)
             newCapacity = minCapacity;
 
-        // 新的数组容量超过MAX_ARRAY_SIZE大小。进入大容量扩容逻辑。当newCapacity为负数时，结果将会大于0
+        // 新的数组容量超过MAX_ARRAY_SIZE大小，进入大容量扩容逻辑。当newCapacity为负数时，结果将会大于0
         // 注：这里的 hugeCapacity() 也是考虑溢出风险的最终处理函数
         if (newCapacity - MAX_ARRAY_SIZE > 0)
             newCapacity = hugeCapacity(minCapacity);
@@ -296,7 +300,6 @@ public class ArrayList<E> extends AbstractList<E>
         // 如果|minCapacity|小于0，抛出溢出异常
         if (minCapacity < 0) // overflow
             throw new OutOfMemoryError();
-
         // 数组容量最大不会超过Integer.MAX_VALUE
         return (minCapacity > MAX_ARRAY_SIZE) ?
             Integer.MAX_VALUE :
@@ -508,6 +511,7 @@ public class ArrayList<E> extends AbstractList<E>
      * @param e element to be appended to this list
      * @return <tt>true</tt> (as specified by {@link Collection#add})
      */
+    // 将数据|e|添加到容器尾部
     public boolean add(E e) {
         // 必要时，扩容内存
         ensureCapacityInternal(size + 1);  // Increments modCount!!
@@ -547,6 +551,7 @@ public class ArrayList<E> extends AbstractList<E>
      * @return the element that was removed from the list
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
+    // 删除容器中第一个等于对象|o|的元素。元素不存在，返回false
     public E remove(int index) {
         // 访问越界判定
         rangeCheck(index);

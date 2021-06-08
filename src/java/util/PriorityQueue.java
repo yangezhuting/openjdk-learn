@@ -79,11 +79,14 @@ import java.util.function.Consumer;
  * @author Josh Bloch, Doug Lea
  * @param <E> the type of elements held in this collection
  */
+// 高效的最小堆实现的优先队列。实现了 Queue 接口
+// 注：最小堆是任一非终端节点的数据值均不大于其子节点的值；添加、删除的时间复杂度为 O(logn)
 public class PriorityQueue<E> extends AbstractQueue<E>
     implements java.io.Serializable {
 
     private static final long serialVersionUID = -7720805057305804111L;
 
+    // 队列默认容量
     private static final int DEFAULT_INITIAL_CAPACITY = 11;
 
     /**
@@ -105,12 +108,14 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      * The comparator, or null if priority queue uses elements'
      * natural ordering.
      */
+    // 比较器实例。为空时，使用队列元素的自身的比较方法
     private final Comparator<? super E> comparator;
 
     /**
      * The number of times this priority queue has been
      * <i>structurally modified</i>.  See AbstractList for gory details.
      */
+    // 容器结构是否有变化的标志位
     transient int modCount = 0; // non-private to simplify nested class access
 
     /**
@@ -144,6 +149,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      *         natural ordering} of the elements will be used.
      * @since 1.8
      */
+    // 构造一个带有自定义比较器的优先队列
     public PriorityQueue(Comparator<? super E> comparator) {
         this(DEFAULT_INITIAL_CAPACITY, comparator);
     }
@@ -159,6 +165,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      * @throws IllegalArgumentException if {@code initialCapacity} is
      *         less than 1
      */
+    // 构造一个指定初始容量、带有自定义比较器的优先队列
     public PriorityQueue(int initialCapacity,
                          Comparator<? super E> comparator) {
         // Note: This restriction of at least one is not actually needed,
@@ -185,19 +192,23 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      * @throws NullPointerException if the specified collection or any
      *         of its elements are null
      */
+    // 构造一个优先队列，其中的数据来自集合|c|中的元素
     @SuppressWarnings("unchecked")
     public PriorityQueue(Collection<? extends E> c) {
         if (c instanceof SortedSet<?>) {
+            // 数据来自已排序的容器
             SortedSet<? extends E> ss = (SortedSet<? extends E>) c;
             this.comparator = (Comparator<? super E>) ss.comparator();
             initElementsFromCollection(ss);
         }
         else if (c instanceof PriorityQueue<?>) {
+            // 数据来自另一个优先队列
             PriorityQueue<? extends E> pq = (PriorityQueue<? extends E>) c;
             this.comparator = (Comparator<? super E>) pq.comparator();
             initFromPriorityQueue(pq);
         }
         else {
+            // 数据来自普通集合
             this.comparator = null;
             initFromCollection(c);
         }
@@ -242,6 +253,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
         initElementsFromCollection(c);
     }
 
+    // 初始化优先队列，其中的数据来自优先队列|c|中的元素
     private void initFromPriorityQueue(PriorityQueue<? extends E> c) {
         if (c.getClass() == PriorityQueue.class) {
             this.queue = c.toArray();
@@ -251,12 +263,17 @@ public class PriorityQueue<E> extends AbstractQueue<E>
         }
     }
 
+    // 初始化优先队列，其中的数据来自集合|c|中的元素
+    // 注：若|c|时普通集合，需要调用heapify()进行重建最小堆
     private void initElementsFromCollection(Collection<? extends E> c) {
         Object[] a = c.toArray();
         // If c.toArray incorrectly doesn't return Object[], copy it.
+        // 获取容器|c|中所有元素，类型通常为Object[].class
+        // 注：Arrays.asList()创建的列表，其c.toArray()返回的不是Object[]数组，而是T[]数组
         if (a.getClass() != Object[].class)
             a = Arrays.copyOf(a, a.length, Object[].class);
         int len = a.length;
+        // 比较器不为空时，队列中所有数据不能为null
         if (len == 1 || this.comparator != null)
             for (int i = 0; i < len; i++)
                 if (a[i] == null)
@@ -270,8 +287,10 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      *
      * @param c the collection
      */
+    // 初始化优先队列，其中的数据来自普通集合|c|中的元素
     private void initFromCollection(Collection<? extends E> c) {
         initElementsFromCollection(c);
+        // 重建最小堆
         heapify();
     }
 
@@ -291,18 +310,24 @@ public class PriorityQueue<E> extends AbstractQueue<E>
     private void grow(int minCapacity) {
         int oldCapacity = queue.length;
         // Double size if small; else grow by 50%
+        // 队列较短时，每次增加2个数据空间；当队列超过64个，每次分配增加一倍容量
         int newCapacity = oldCapacity + ((oldCapacity < 64) ?
                                          (oldCapacity + 2) :
                                          (oldCapacity >> 1));
         // overflow-conscious code
+        // 新的数组容量超过MAX_ARRAY_SIZE大小，进入大容量扩容逻辑。当newCapacity为负数时，结果将会大于0
+        // 注：这里的 hugeCapacity() 也是考虑溢出风险的最终处理函数
         if (newCapacity - MAX_ARRAY_SIZE > 0)
             newCapacity = hugeCapacity(minCapacity);
+        // 返回的是重新申请的一块内存，他的数据拷贝自原始的数组数据（底层使用System.arraycopy进行按字节拷贝）
         queue = Arrays.copyOf(queue, newCapacity);
     }
 
     private static int hugeCapacity(int minCapacity) {
+        // 如果|minCapacity|小于0，抛出溢出异常
         if (minCapacity < 0) // overflow
             throw new OutOfMemoryError();
+        // 数组容量最大不会超过Integer.MAX_VALUE
         return (minCapacity > MAX_ARRAY_SIZE) ?
             Integer.MAX_VALUE :
             MAX_ARRAY_SIZE;
@@ -317,6 +342,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      *         according to the priority queue's ordering
      * @throws NullPointerException if the specified element is null
      */
+    // 将数据|e|添加到队列容器
     public boolean add(E e) {
         return offer(e);
     }
@@ -330,14 +356,19 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      *         according to the priority queue's ordering
      * @throws NullPointerException if the specified element is null
      */
+    // 将数据|e|添加到队列容器
     public boolean offer(E e) {
         if (e == null)
             throw new NullPointerException();
+        // 调整容量时，需设置容器结构有变化的标志位
         modCount++;
         int i = size;
+        // 队列容量已满，增加分配内存
         if (i >= queue.length)
             grow(i + 1);
         size = i + 1;
+        // 1. 新增的元素是首元素
+        // 2. 从新增的叶节点开始，向上移动小的元素至父节点，使其符合最小堆特性
         if (i == 0)
             queue[0] = e;
         else
@@ -345,11 +376,13 @@ public class PriorityQueue<E> extends AbstractQueue<E>
         return true;
     }
 
+    // 查看队列头元素。即该队列最小的元素
     @SuppressWarnings("unchecked")
     public E peek() {
         return (size == 0) ? null : (E) queue[0];
     }
 
+    // 查找对象|o|在列表中的索引值，查找失败返回-1
     private int indexOf(Object o) {
         if (o != null) {
             for (int i = 0; i < size; i++)
@@ -370,6 +403,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      * @param o element to be removed from this queue, if present
      * @return {@code true} if this queue changed as a result of the call
      */
+    // 删除容器中第一个等于对象|o|的元素。元素不存在，返回false
     public boolean remove(Object o) {
         int i = indexOf(o);
         if (i == -1)
@@ -387,6 +421,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      * @param o element to be removed from this queue, if present
      * @return {@code true} if removed
      */
+    // 删除容器中第一个等于（引用等于）对象|o|的元素。元素不存在，返回false
     boolean removeEq(Object o) {
         for (int i = 0; i < size; i++) {
             if (o == queue[i]) {
@@ -405,6 +440,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      * @param o object to be checked for containment in this queue
      * @return {@code true} if this queue contains the specified element
      */
+    // 查找对象|o|是否在列表中
     public boolean contains(Object o) {
         return indexOf(o) != -1;
     }
@@ -422,7 +458,9 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      *
      * @return an array containing all of the elements in this queue
      */
+    // 将队列容器中的数据转换成数组返回，这个方法返回的是Object[]的数组类型
     public Object[] toArray() {
+        // 返回的是重新申请的一块内存，他的数据拷贝自原始的列队数据（底层使用System.arraycopy进行按字节拷贝）
         return Arrays.copyOf(queue, size);
     }
 
@@ -462,13 +500,18 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      *         this queue
      * @throws NullPointerException if the specified array is null
      */
+    // 将队列容器中的数据转换成数组返回，这个方法返回的是T[]的数组类型。当数组|a|长度足够时，直接使用它
     @SuppressWarnings("unchecked")
     public <T> T[] toArray(T[] a) {
         final int size = this.size;
         if (a.length < size)
             // Make a new array of a's runtime type, but my contents:
+            // 返回的是重新申请的一块内存，他的数据拷贝自原始的队列数据（底层使用System.arraycopy进行按字节拷贝）
+            // 数组的类型使用泛型的实际类型
             return (T[]) Arrays.copyOf(queue, size, a.getClass());
+        // 当数组|a|长度足够时，直接使用它，将原始的队列数据拷贝到|a|数组中返回
         System.arraycopy(queue, 0, a, 0, size);
+        // 将多余的数组元素置为null
         if (a.length > size)
             a[size] = null;
         return a;
@@ -608,11 +651,17 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      * position before i. This fact is used by iterator.remove so as to
      * avoid missing traversing elements.
      */
+    // 删除索引为|i|的节点，向上移动小的元素至父节点，使其符合最小堆特性
+    // 注：算法形象化描述：将新增的数据冒泡到它应该在的节点位置
     @SuppressWarnings("unchecked")
     private E removeAt(int i) {
+        // 索引越界合法性断言
         // assert i >= 0 && i < size;
+
+        // 调整容量时，需设置容器结构有变化的标志位
         modCount++;
         int s = --size;
+        // 当|i|为叶节点，直接清除该节点
         if (s == i) // removed last element
             queue[i] = null;
         else {
@@ -640,6 +689,8 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      * @param k the position to fill
      * @param x the item to insert
      */
+    // 从新增的叶节点|e|、索引为|k|的数据开始，向上移动小的元素至父节点，使其符合最小堆特性
+    // 算法描述：将新增的数据冒泡到第一个大于等于它的父节点上
     private void siftUp(int k, E x) {
         if (comparator != null)
             siftUpUsingComparator(k, x);
@@ -647,10 +698,16 @@ public class PriorityQueue<E> extends AbstractQueue<E>
             siftUpComparable(k, x);
     }
 
+    // 从新增的叶节点|e|、其索引为|k|的数据开始，向上移动小的元素至父节点，使其符合最小堆特性
+    // 算法描述：将新增的数据冒泡到第一个大于等于它的父节点上
+    // 注：不使用自定义比较器的版本
     @SuppressWarnings("unchecked")
     private void siftUpComparable(int k, E x) {
+        // 使用元素自身比较函数
         Comparable<? super E> key = (Comparable<? super E>) x;
+        // 从该新增的叶节点开始，向上遍历所有父节点
         while (k > 0) {
+            // 比较当前节点与父节点的大小，若当前节点小于父节点，就与父节点交换，直到大于等于父节点
             int parent = (k - 1) >>> 1;
             Object e = queue[parent];
             if (key.compareTo((E) e) >= 0)
@@ -658,12 +715,18 @@ public class PriorityQueue<E> extends AbstractQueue<E>
             queue[k] = e;
             k = parent;
         }
+        // 将新增的数据冒泡到它应该在的节点位置
         queue[k] = key;
     }
 
+    // 从新增的叶节点|e|、其索引为|k|的数据开始，向上移动小的元素至父节点，使其符合最小堆特性
+    // 算法描述：将新增的数据冒泡到第一个大于等于它的父节点上
+    // 注：使用自定义比较器的版本
     @SuppressWarnings("unchecked")
     private void siftUpUsingComparator(int k, E x) {
+        // 从该新增的叶节点开始，向上遍历所有父节点
         while (k > 0) {
+            // 比较当前节点与父节点的大小，若当前节点小于父节点，就与父节点交换，直到大于等于父节点
             int parent = (k - 1) >>> 1;
             Object e = queue[parent];
             if (comparator.compare(x, (E) e) >= 0)
@@ -671,6 +734,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
             queue[k] = e;
             k = parent;
         }
+        // 将新增的数据冒泡到它应该在的节点位置
         queue[k] = x;
     }
 
@@ -682,6 +746,10 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      * @param k the position to fill
      * @param x the item to insert
      */
+    // 从待删除索引为|k|的数据开始，向下遍历子树，将左右子节点中较小的节点替换到父节点，直到第一个大于|x|节点结束，用|x|替换到该父节点，完成删除。其中|x|为叶节点
+    // 算法描述：将删除元素的动作发生在叶节点上，并将该叶节点移动到实际要删除节点的子树中第一个小于该叶节点的父节点上
+    // 1. 若是删除操作，则|x|为叶节点。即被删除的节点使用叶节点来填充
+    // 2. 若是重建操作，则|x|节点的索引就是|k|。即将索引为|k|的父节点中较小的左右节点移动到该节点
     private void siftDown(int k, E x) {
         if (comparator != null)
             siftDownUsingComparator(k, x);
@@ -689,40 +757,62 @@ public class PriorityQueue<E> extends AbstractQueue<E>
             siftDownComparable(k, x);
     }
 
+    // 从待删除索引为|k|的数据开始，向下遍历子树，将左右子节点中较小的节点替换到父节点，直到第一个大于等于|x|节点结束，用|x|替换到该父节点，完成删除。
+    // 算法描述：将删除元素的动作发生在叶节点上，并将该叶节点移动到实际要删除节点的子树中第一个小于该叶节点的父节点上
+    // 1. 若是删除操作，则|x|为叶节点。即被删除的节点使用叶节点来填充
+    // 2. 若是重建操作，则|x|节点的索引就是|k|。即将索引为|k|的父节点中较小的左右节点移动到该节点
+    // 注：不使用自定义比较器的版本
     @SuppressWarnings("unchecked")
     private void siftDownComparable(int k, E x) {
         Comparable<? super E> key = (Comparable<? super E>)x;
+        // 遍历一颗子树
         int half = size >>> 1;        // loop while a non-leaf
         while (k < half) {
+            // 获取|k|节点的左右子节点
             int child = (k << 1) + 1; // assume left child is least
             Object c = queue[child];
             int right = child + 1;
+            // 获取左右子节点中较小的一个节点
             if (right < size &&
                 ((Comparable<? super E>) c).compareTo((E) queue[right]) > 0)
                 c = queue[child = right];
+            // 若待替换的|x|数据小于待删除的节点，直接替换为|x|就不会破坏原始的最小堆特性
             if (key.compareTo((E) c) <= 0)
                 break;
+            // 左右子节点中较小的一个节点移动至父节点
             queue[k] = c;
             k = child;
         }
+        // 将叶节点|x|存放到它应该在的节点位置
         queue[k] = key;
     }
 
+    // 从待删除索引为|k|的数据开始，向下遍历子树，将左右子节点中较小的节点替换到父节点，直到第一个大于等于|x|节点结束，用|x|替换到该父节点，完成删除。其中|x|为已删除的叶节点
+    // 算法描述：将删除元素的动作发生在叶节点上，并将该叶节点移动到实际要删除节点的子树中第一个小于该叶节点的父节点上
+    // 1. 若是删除操作，则|x|为叶节点。即被删除的节点使用叶节点来填充
+    // 2. 若是重建操作，则|x|节点的索引就是|k|。即将索引为|k|的父节点中较小的左右节点移动到该节点
+    // 注：使用自定义比较器的版本
     @SuppressWarnings("unchecked")
     private void siftDownUsingComparator(int k, E x) {
+        // 遍历一颗子树
         int half = size >>> 1;
         while (k < half) {
+            // 获取|k|节点的左右子节点
             int child = (k << 1) + 1;
             Object c = queue[child];
             int right = child + 1;
+            // 获取左右子节点中较小的一个节点
             if (right < size &&
                 comparator.compare((E) c, (E) queue[right]) > 0)
                 c = queue[child = right];
+            // 若待替换的|x|数据小于待删除的节点，直接替换为|x|就不会破坏原始的最小堆特性
             if (comparator.compare(x, (E) c) <= 0)
                 break;
+            // 左右子节点中较小的一个节点移动至父节点
             queue[k] = c;
             k = child;
         }
+        // 将叶节点|x|存放到它应该在的节点位置
         queue[k] = x;
     }
 
@@ -730,8 +820,10 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      * Establishes the heap invariant (described above) in the entire tree,
      * assuming nothing about the order of the elements prior to the call.
      */
+    // 重建最小堆
     @SuppressWarnings("unchecked")
     private void heapify() {
+        // 遍历所有节点，构建每颗子树使其符合最小堆特性
         for (int i = (size >>> 1) - 1; i >= 0; i--)
             siftDown(i, (E) queue[i]);
     }
@@ -808,6 +900,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
      * @return a {@code Spliterator} over the elements in this queue
      * @since 1.8
      */
+    // 获取PriorityQueue容器的分割器对象实例。用于Stream流中
     public final Spliterator<E> spliterator() {
         return new PriorityQueueSpliterator<E>(this, 0, -1, 0);
     }
@@ -817,9 +910,14 @@ public class PriorityQueue<E> extends AbstractQueue<E>
          * This is very similar to ArrayList Spliterator, except for
          * extra null checks.
          */
+        // 原始容器的引用
         private final PriorityQueue<E> pq;
+        // 分割器的起始索引，也是分割器的正向消费元素进度索引
         private int index;            // current index, modified on advance/split
+        // 分割器的中含有元素个数，也是一个超尾索引
         private int fence;            // -1 until first use
+        // 第一次分割、消费分隔器时，立即保存原始容器的修改次数。在使用分割器过程中，原始容器不能再进行结构性修改
+        // 注：modCount属性字段非常重要，可以有效的防止分割器非法访问的问题
         private int expectedModCount; // initialized when fence set
 
         /** Creates new spliterator covering the given range */
@@ -834,12 +932,16 @@ public class PriorityQueue<E> extends AbstractQueue<E>
         private int getFence() { // initialize fence to size on first use
             int hi;
             if ((hi = fence) < 0) {
+                // 第一次使用分割器时，立即保存原始容器的修改次数。在使用分割器过程中，原始容器不能再进行结构性修改
+                // 注：modCount属性字段非常重要，可以有效的防止分割器非法访问的问题
                 expectedModCount = pq.modCount;
                 hi = fence = pq.size;
             }
             return hi;
         }
 
+        // 二分切割分割器，返回的新分割器起始索引等于原始分隔器，结尾索引是原始容器的二分之一；而原始分割器的起始索引被重置为二分之一
+        // 即：切分后，原始的分割器引用后一半数据，返回的新分割器引用前一半数据
         public PriorityQueueSpliterator<E> trySplit() {
             int hi = getFence(), lo = index, mid = (lo + hi) >>> 1;
             return (lo >= mid) ? null :
@@ -847,22 +949,29 @@ public class PriorityQueue<E> extends AbstractQueue<E>
                                                 expectedModCount);
         }
 
+        // 消费分割器中剩余元素，执行指定方法
         @SuppressWarnings("unchecked")
         public void forEachRemaining(Consumer<? super E> action) {
             int i, hi, mc; // hoist accesses and checks from loop
             PriorityQueue<E> q; Object[] a;
             if (action == null)
                 throw new NullPointerException();
+            // 获取原始容器的元素
             if ((q = pq) != null && (a = q.queue) != null) {
+                // 获取结束索引hi。首个分割器首次时fence==-1，将其设置为原始容器的结尾索引
+                // 注：区分首个分隔器，是因为分割器在使用过程中会不停的二分递归切分
                 if ((hi = fence) < 0) {
                     mc = q.modCount;
                     hi = q.size;
                 }
                 else
                     mc = expectedModCount;
+                // 消费分隔器中剩余元素（|index=hi|代表消费剩余所有元素）
                 if ((i = index) >= 0 && (index = hi) <= a.length) {
+                    // 遍历分割器中剩余元素，执行指定方法
                     for (E e;; ++i) {
                         if (i < hi) {
+                            // 优先队列不能有空元素
                             if ((e = (E) a[i]) == null) // must be CME
                                 break;
                             action.accept(e);
@@ -870,6 +979,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
                         else if (q.modCount != mc)
                             break;
                         else
+                            // 遍历成功，直接返回
                             return;
                     }
                 }
@@ -877,16 +987,19 @@ public class PriorityQueue<E> extends AbstractQueue<E>
             throw new ConcurrentModificationException();
         }
 
+        // 消费分割器中首个元素，执行指定方法
         public boolean tryAdvance(Consumer<? super E> action) {
             if (action == null)
                 throw new NullPointerException();
             int hi = getFence(), lo = index;
             if (lo >= 0 && lo < hi) {
+                // 设置下一次tryAdvance()的元素索引。即，当前元素被消费
                 index = lo + 1;
                 @SuppressWarnings("unchecked") E e = (E)pq.queue[lo];
                 if (e == null)
                     throw new ConcurrentModificationException();
                 action.accept(e);
+                // 在使用分割器过程中，原始容器不能再进行结构性修改
                 if (pq.modCount != expectedModCount)
                     throw new ConcurrentModificationException();
                 return true;
