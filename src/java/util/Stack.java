@@ -45,6 +45,7 @@ package java.util;
  * @author  Jonathan Payne
  * @since   JDK1.0
  */
+// 数据结构"栈"的实现类，线程安全。底层基于Vector实现。
 public
 class Stack<E> extends Vector<E> {
     /**

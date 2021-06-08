@@ -29,6 +29,7 @@ import java.util.Stack;
  * @author Jacek Ambroziak
  * @author Santiago Pericas-Geertsen
  */
+// 强转方式"实例化"字符串类型的"栈"
 public final class StringStack extends Stack {
     static final long serialVersionUID = -1506910875640317898L;
     public String peekString() {

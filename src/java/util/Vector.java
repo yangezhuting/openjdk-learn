@@ -80,6 +80,8 @@ import java.util.function.UnaryOperator;
  * @see LinkedList
  * @since   JDK1.0
  */
+// 可高效的进行随机访问（按索引访问）的列表结构，是ArrayList的线程安全版本。底层基于数组实现。
+// 注：算法实现上，除了有synchronized关键字，与ArrayList几乎完全一致
 public class Vector<E>
     extends AbstractList<E>
     implements List<E>, RandomAccess, Cloneable, java.io.Serializable
@@ -257,18 +259,25 @@ public class Vector<E>
     private void grow(int minCapacity) {
         // overflow-conscious code
         int oldCapacity = elementData.length;
+        // 新的数组容量为老容量的2倍。考虑了溢出风险，即，当扩容到2的整数溢出，它将变成负数
         int newCapacity = oldCapacity + ((capacityIncrement > 0) ?
                                          capacityIncrement : oldCapacity);
+        // 新数组容量为手动设置的最小容量与2倍老容量中的较大值。考虑了溢出风险，即，当minCapacity为负数，两个整数之和溢出4字节，结果也将小于0
         if (newCapacity - minCapacity < 0)
             newCapacity = minCapacity;
+        // 新的数组容量超过MAX_ARRAY_SIZE大小，进入大容量扩容逻辑。当newCapacity为负数时，结果将会大于0
+        // 注：这里的 hugeCapacity() 也是考虑溢出风险的最终处理函数
         if (newCapacity - MAX_ARRAY_SIZE > 0)
             newCapacity = hugeCapacity(minCapacity);
+        // 返回的是重新申请的一块内存，他的数据拷贝自原始的数组数据（底层使用System.arraycopy进行按字节拷贝）
         elementData = Arrays.copyOf(elementData, newCapacity);
     }
 
     private static int hugeCapacity(int minCapacity) {
+        // 如果|minCapacity|小于0，抛出溢出异常
         if (minCapacity < 0) // overflow
             throw new OutOfMemoryError();
+        // 数组容量最大不会超过Integer.MAX_VALUE
         return (minCapacity > MAX_ARRAY_SIZE) ?
             Integer.MAX_VALUE :
             MAX_ARRAY_SIZE;

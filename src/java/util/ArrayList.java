@@ -103,7 +103,7 @@ import java.util.function.UnaryOperator;
  * @since   1.2
  */
 
-// 可高效的进行随机访问（按索引访问）的列表结构。实现了 List,RandomAccess 接口
+// 可高效的进行随机访问（按索引访问）的列表结构。实现了 List,RandomAccess 接口。底层基于数组实现
 // 注：与LinkedList相比，随机访问效率更高，但频繁的插入、删除效率欠佳，因为这可能会导致底层数组的扩容（内存要重新分配及拷贝）
 public class ArrayList<E> extends AbstractList<E>
         implements List<E>, RandomAccess, Cloneable, java.io.Serializable
@@ -286,7 +286,6 @@ public class ArrayList<E> extends AbstractList<E>
         // 新数组容量为手动设置的最小容量与1.5倍老容量中的较大值。考虑了溢出风险，即，当minCapacity为负数，两个整数之和溢出4字节，结果也将小于0
         if (newCapacity - minCapacity < 0)
             newCapacity = minCapacity;
-
         // 新的数组容量超过MAX_ARRAY_SIZE大小，进入大容量扩容逻辑。当newCapacity为负数时，结果将会大于0
         // 注：这里的 hugeCapacity() 也是考虑溢出风险的最终处理函数
         if (newCapacity - MAX_ARRAY_SIZE > 0)
