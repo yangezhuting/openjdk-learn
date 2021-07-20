@@ -44,11 +44,14 @@ package java.util;
  * @version 2011.02.11 m765.827.12i:5\7pm
  * @since 1.7
  */
+// 双基准快速排序实现类。主要用于七种基本类型的排序
+// 注：该类对外仅提供静态方法的使用方式，即，不能实例化
 final class DualPivotQuicksort {
 
     /**
      * Prevents instantiation.
      */
+    // 私有构造。防止类被实例化
     private DualPivotQuicksort() {}
 
     /*
@@ -58,6 +61,7 @@ final class DualPivotQuicksort {
     /**
      * The maximum number of runs in merge sort.
      */
+    // 待合并的序列的最大数量
     private static final int MAX_RUN_COUNT = 67;
 
     /**
@@ -69,24 +73,28 @@ final class DualPivotQuicksort {
      * If the length of an array to be sorted is less than this
      * constant, Quicksort is used in preference to merge sort.
      */
+    // 如果参与排序的数组长度小于这个值，优先使用快速排序而不是归并排序
     private static final int QUICKSORT_THRESHOLD = 286;
 
     /**
      * If the length of an array to be sorted is less than this
      * constant, insertion sort is used in preference to Quicksort.
      */
+    // 如果参与排序的数组长度小于这个值，考虑插入排序，而不是快速排序
     private static final int INSERTION_SORT_THRESHOLD = 47;
 
     /**
      * If the length of a byte array to be sorted is greater than this
      * constant, counting sort is used in preference to insertion sort.
      */
+    // 这个是byte数组的
     private static final int COUNTING_SORT_THRESHOLD_FOR_BYTE = 29;
 
     /**
      * If the length of a short or char array to be sorted is greater
      * than this constant, counting sort is used in preference to Quicksort.
      */
+    // 这个是short或char数组的启用计数排序（桶排序）的阈值
     private static final int COUNTING_SORT_THRESHOLD_FOR_SHORT_OR_CHAR = 3200;
 
     /*
@@ -104,31 +112,47 @@ final class DualPivotQuicksort {
      * @param workBase origin of usable space in work array
      * @param workLen usable size of work array
      */
+    // 1. 其中a是需被排序的int数组，left和right是该数组中需要被排序的部分的左右界限（包含）
+    // 2. 后面的work，workBase和workLen三个参数用在归并排序(merge sort)的场景中
     static void sort(int[] a, int left, int right,
                      int[] work, int workBase, int workLen) {
         // Use Quicksort on small arrays
+        // 当序列长度小于QUICKSORT_THRESHOLD，使用快速排序主体（参入排序、双基准排序）
+        // 注：归并排序比较适用于处理较大规模的数据，它比较消耗内存
         if (right - left < QUICKSORT_THRESHOLD) {
             sort(a, left, right, true);
             return;
         }
 
+        // 优化后的归并排序（TimSort）思想是："分"的时候，直接从左往右，划分成各种不同长度的、有序的子序列，然
+        // 后对这些子序列进行归并，这样一来，复杂度就大大降低了，因为无须"分"到只剩1个元素的子序列。
+        // 注：如果这个序列太过杂乱无章，即分割出的子序列数量大于MAX_RUN_COUNT时，将使用快速排序主体（参入排序、双基准排序）
+
         /*
          * Index run[i] is the start of i-th run
          * (ascending or descending sequence).
          */
+        // run[i]意味着第i个有序数列开始的位置（升序）
         int[] run = new int[MAX_RUN_COUNT + 1];
         int count = 0; run[0] = left;
 
         // Check if the array is nearly sorted
+        // 检查数组是不是已经高度有序状态。这个循环用于分割有序序列
         for (int k = left; k < right; run[count] = k) {
             if (a[k] < a[k + 1]) { // ascending
+                // 越过升序
                 while (++k <= right && a[k - 1] <= a[k]);
             } else if (a[k] > a[k + 1]) { // descending
+                // 越过降序
                 while (++k <= right && a[k - 1] >= a[k]);
+                // 转为升序，对称调换
                 for (int lo = run[count] - 1, hi = k; ++lo < --hi; ) {
                     int t = a[lo]; a[lo] = a[hi]; a[hi] = t;
                 }
             } else { // equal
+                // 统计相邻元素相等的长度，当超过MAX_RUN_LENGTH时，将使用快速排序主体（参入排序、双基准排序）
+                // 即，一个子序列中，最多可容纳MAX_RUN_LENGTH个相等元素。因为归并排序每次都要比较到最后一个元素
+                // 为止，这使得归并排序中分隔的有序子序列得不到优化
                 for (int m = MAX_RUN_LENGTH; ++k <= right && a[k - 1] == a[k]; ) {
                     if (--m == 0) {
                         sort(a, left, right, true);
@@ -141,6 +165,7 @@ final class DualPivotQuicksort {
              * The array is not highly structured,
              * use Quicksort instead of merge sort.
              */
+            // 如果这个序列太过杂乱无章，即分割出的子序列数量大于MAX_RUN_COUNT时，将使用快速排序主体（参入排序、双基准排序）
             if (++count == MAX_RUN_COUNT) {
                 sort(a, left, right, true);
                 return;
@@ -152,14 +177,17 @@ final class DualPivotQuicksort {
         if (run[count] == right++) { // The last run contains one element
             run[++count] = right;
         } else if (count == 1) { // The array is already sorted
+            // 这里表示序列已经是升序列，直接返回
             return;
         }
 
         // Determine alternation base for merge
+        // 决定产生变化的基数组，即在work[]上变化还是在a[]上变化
         byte odd = 0;
         for (int n = 1; (n <<= 1) < count; odd ^= 1);
 
         // Use or create temporary array b for merging
+        // 为归并过程创建一个临时数组b
         int[] b;                 // temp array; alternates with a
         int ao, bo;              // array offsets from 'left'
         int blen = right - left; // space needed for b
@@ -167,6 +195,7 @@ final class DualPivotQuicksort {
             work = new int[blen];
             workBase = 0;
         }
+        // 决定a和b的指向，指向原a[]还是work[]
         if (odd == 0) {
             System.arraycopy(a, left, work, workBase, blen);
             b = a;
@@ -180,8 +209,12 @@ final class DualPivotQuicksort {
         }
 
         // Merging
+        // 归并。最外层循环，直到count为1，也就是栈中待合并的序列只有一个的时候，标志归并成功
+        // a 做原始数组，b 做临时数组
         for (int last; count > 1; count = last) {
+            // 遍历数组，合并相邻的两个升序序列
             for (int k = (last = 0) + 2; k <= count; k += 2) {
+                // 合并run[k-2] 与 run[k-1]两个序列
                 int hi = run[k], mi = run[k - 1];
                 for (int i = run[k - 2], p = i, q = mi; i < hi; ++i) {
                     if (q >= hi || p < mi && a[p + ao] <= a[q + ao]) {
@@ -190,8 +223,10 @@ final class DualPivotQuicksort {
                         b[i + bo] = a[q++ + ao];
                     }
                 }
+                // 把合并之后的数列往前移动，即，合并后，有序序列将扩大到原来run[k]的索引
                 run[++last] = hi;
             }
+            // 如果栈的长度为奇数，那么把最后落单的有序数列copy过对面
             if ((count & 1) != 0) {
                 for (int i = right, lo = run[count - 1]; --i >= lo;
                     b[i + bo] = a[i + ao]
@@ -215,13 +250,18 @@ final class DualPivotQuicksort {
         int length = right - left + 1;
 
         // Use insertion sort on tiny arrays
+        //
+        // 如果序列长度过小，小于INSERTION_SORT_THRESHOLD，就使用插入排序
+        // 插入排序一般应用于数据量较小的序列排序中
         if (length < INSERTION_SORT_THRESHOLD) {
+            // 代表要比较的序列位于数组最左边
             if (leftmost) {
                 /*
                  * Traditional (without sentinel) insertion sort,
                  * optimized for server VM, is used in case of
                  * the leftmost part.
                  */
+                // 经典的插入排序算法，不带哨兵。做了优化，在leftmost情况下使用
                 for (int i = left, j = i; i < right; j = ++i) {
                     int ai = a[i + 1];
                     while (ai < a[j]) {
@@ -236,6 +276,7 @@ final class DualPivotQuicksort {
                 /*
                  * Skip the longest ascending sequence.
                  */
+                // 首先越过开头的升序的部分
                 do {
                     if (left >= right) {
                         return;
@@ -250,6 +291,13 @@ final class DualPivotQuicksort {
                  * sort, which is faster (in the context of Quicksort)
                  * than traditional implementation of insertion sort.
                  */
+                // 成对插入排序。即：
+                // 1. 将要插入的数据，第一个值赋值a1,第二个值赋值a2
+                // 2. 然后判断a1与a2的大小，使a1>a2(关键点)
+                // 3. 接下来，首先是插入大的数值a1，将a1与k之前的数字一一比较，直到数值小于a1为止，把a1插入到合适的位置
+                // 4. 接下来，插入小的数值a2,将a2与此时k之前的数字一一比较，这个k已经变化到a1左边，即此时，只需在a1左边插入a2即可
+                // 因此减少了a2的比较次数
+                // 5. 最后把最后一个没有遍历到的数据插入到合适位置
                 for (int k = left; ++left <= right; k = ++left) {
                     int a1 = a[k], a2 = a[left];
 
@@ -276,7 +324,10 @@ final class DualPivotQuicksort {
             return;
         }
 
+        // 开始双轴快排的选轴工作
+
         // Inexpensive approximation of length / 7
+        // length/7 的一种低复杂度的实现
         int seventh = (length >> 3) + (length >> 6) + 1;
 
         /*
@@ -286,6 +337,8 @@ final class DualPivotQuicksort {
          * these elements was empirically determined to work well on
          * a wide variety of inputs.
          */
+        // 取五个靠近中间位置的元素，这五个位置的间隔为length/7
+        // 对这五个元素进行排序，这些元素最终会被用来做轴
         int e3 = (left + right) >>> 1; // The midpoint
         int e2 = e3 - seventh;
         int e1 = e2 - seventh;
@@ -293,6 +346,7 @@ final class DualPivotQuicksort {
         int e5 = e4 + seventh;
 
         // Sort these elements using insertion sort
+        // 使用插入排序将这五个位置的元素排序起来
         if (a[e2] < a[e1]) { int t = a[e2]; a[e2] = a[e1]; a[e1] = t; }
 
         if (a[e3] < a[e2]) { int t = a[e3]; a[e3] = a[e2]; a[e2] = t;
@@ -315,12 +369,15 @@ final class DualPivotQuicksort {
         int less  = left;  // The index of the first element of center part
         int great = right; // The index before the first element of right part
 
+        // 若满足下面这个条件，则以e2和e4进行双轴快排，否则以e3进行单轴快排
         if (a[e1] != a[e2] && a[e2] != a[e3] && a[e3] != a[e4] && a[e4] != a[e5]) {
             /*
              * Use the second and fourth of the five sorted elements as pivots.
              * These values are inexpensive approximations of the first and
              * second terciles of the array. Note that pivot1 <= pivot2.
              */
+            // 使用5个元素中的e2，e4两个位置的元素作为轴，他们两个大致处在四分位的位置上
+            // 需要注意的是pivot1 <= pivot2
             int pivot1 = a[e2];
             int pivot2 = a[e4];
 
@@ -330,12 +387,15 @@ final class DualPivotQuicksort {
              * is complete, the pivots are swapped back into their final
              * positions, and excluded from subsequent sorting.
              */
+            // 这里就是用第一个和最后一个元素覆盖e2和e4上的元素，
+            // 这样e2和e4上的元素就被排除出下面的排序，因为他们已经是枢轴
             a[e2] = a[left];
             a[e4] = a[right];
 
             /*
              * Skip elements, which are less or greater than pivot values.
              */
+            // 跳过一些队首的小于pivot1的值，跳过队尾的大于pivot2的值
             while (a[++less] < pivot1);
             while (a[--great] > pivot2);
 
@@ -358,10 +418,12 @@ final class DualPivotQuicksort {
              *
              * Pointer k is the first index of ?-part.
              */
+            // 这里的思想是：k不断右移，将元素放进相对应的区域，直到碰上great
             outer:
             for (int k = less - 1; ++k <= great; ) {
                 int ak = a[k];
                 if (ak < pivot1) { // Move a[k] to left part
+                    // 挪到left part中去
                     a[k] = a[less];
                     /*
                      * Here and below we use "a[i] = b; i++;" instead
@@ -370,8 +432,9 @@ final class DualPivotQuicksort {
                     a[less] = ak;
                     ++less;
                 } else if (ak > pivot2) { // Move a[k] to right part
-                    while (a[great] > pivot2) {
-                        if (great-- == k) {
+                    // 挪到right part中去
+                    while (a[great] > pivot2) { // 这里先将一波大于privot2的放在right part
+                        if (great-- == k) { // k遇到great，本次分割终止
                             break outer;
                         }
                     }
@@ -476,6 +539,8 @@ final class DualPivotQuicksort {
              * Use the third of the five sorted elements as pivot.
              * This value is inexpensive approximation of the median.
              */
+            // 用单轴3-way进行分区，因为e1-e5至少存在一对相等的元素，
+            // 因此判定这个数组中重复的元素居多
             int pivot = a[e3];
 
             /*
@@ -1003,12 +1068,15 @@ final class DualPivotQuicksort {
     static void sort(short[] a, int left, int right,
                      short[] work, int workBase, int workLen) {
         // Use counting sort on large arrays
+        // 统计排序（桶排序）适用于元素个数远大于元素种数的情况，适用于Short、Byte、Char等元素种数较少的类型
         if (right - left > COUNTING_SORT_THRESHOLD_FOR_SHORT_OR_CHAR) {
             int[] count = new int[NUM_SHORT_VALUES];
 
+            // 从左往右，存在的数的count加1
             for (int i = left - 1; ++i <= right;
                 count[a[i] - Short.MIN_VALUE]++
             );
+            // 从右往左，将count不是0的数提取出来，这样的序列就变成有序了
             for (int i = NUM_SHORT_VALUES, k = right + 1; k > left; ) {
                 while (count[--i] == 0);
                 short value = (short) (i + Short.MIN_VALUE);

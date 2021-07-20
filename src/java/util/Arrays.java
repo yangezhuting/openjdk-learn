@@ -108,6 +108,8 @@ public class Arrays {
      * Checks that {@code fromIndex} and {@code toIndex} are in
      * the range and throws an exception if they aren't.
      */
+    // 检查|fromIndex|和|toIndex|是否在索引范围内，如果不在范围内，则引发异常
+    // 注：|toIndex|可以等于数组长度，即，|toIndex|是一个超尾索引
     private static void rangeCheck(int arrayLength, int fromIndex, int toIndex) {
         if (fromIndex > toIndex) {
             throw new IllegalArgumentException(
@@ -140,6 +142,7 @@ public class Arrays {
      *
      * @param a the array to be sorted
      */
+    // 对数组|a|进行排序
     public static void sort(int[] a) {
         DualPivotQuicksort.sort(a, 0, a.length - 1, null, 0, 0);
     }
@@ -164,6 +167,7 @@ public class Arrays {
      * @throws ArrayIndexOutOfBoundsException
      *     if {@code fromIndex < 0} or {@code toIndex > a.length}
      */
+    // 对数组|a|进行排序，索引范围是：[fromIndex,toIndex)
     public static void sort(int[] a, int fromIndex, int toIndex) {
         rangeCheck(a.length, fromIndex, toIndex);
         DualPivotQuicksort.sort(a, fromIndex, toIndex - 1, null, 0, 0);
@@ -180,6 +184,7 @@ public class Arrays {
      *
      * @param a the array to be sorted
      */
+    // 对数组|a|进行排序
     public static void sort(long[] a) {
         DualPivotQuicksort.sort(a, 0, a.length - 1, null, 0, 0);
     }
@@ -204,6 +209,7 @@ public class Arrays {
      * @throws ArrayIndexOutOfBoundsException
      *     if {@code fromIndex < 0} or {@code toIndex > a.length}
      */
+    // 对数组|a|进行排序，索引范围是：[fromIndex,toIndex)
     public static void sort(long[] a, int fromIndex, int toIndex) {
         rangeCheck(a.length, fromIndex, toIndex);
         DualPivotQuicksort.sort(a, fromIndex, toIndex - 1, null, 0, 0);
@@ -220,6 +226,7 @@ public class Arrays {
      *
      * @param a the array to be sorted
      */
+    // 对数组|a|进行排序
     public static void sort(short[] a) {
         DualPivotQuicksort.sort(a, 0, a.length - 1, null, 0, 0);
     }
@@ -244,6 +251,7 @@ public class Arrays {
      * @throws ArrayIndexOutOfBoundsException
      *     if {@code fromIndex < 0} or {@code toIndex > a.length}
      */
+    // 对数组|a|进行排序，索引范围是：[fromIndex,toIndex)
     public static void sort(short[] a, int fromIndex, int toIndex) {
         rangeCheck(a.length, fromIndex, toIndex);
         DualPivotQuicksort.sort(a, fromIndex, toIndex - 1, null, 0, 0);
@@ -260,6 +268,7 @@ public class Arrays {
      *
      * @param a the array to be sorted
      */
+    // 对数组|a|进行排序
     public static void sort(char[] a) {
         DualPivotQuicksort.sort(a, 0, a.length - 1, null, 0, 0);
     }
@@ -284,6 +293,7 @@ public class Arrays {
      * @throws ArrayIndexOutOfBoundsException
      *     if {@code fromIndex < 0} or {@code toIndex > a.length}
      */
+    // 对数组|a|进行排序，索引范围是：[fromIndex,toIndex)
     public static void sort(char[] a, int fromIndex, int toIndex) {
         rangeCheck(a.length, fromIndex, toIndex);
         DualPivotQuicksort.sort(a, fromIndex, toIndex - 1, null, 0, 0);
@@ -300,6 +310,7 @@ public class Arrays {
      *
      * @param a the array to be sorted
      */
+    // 对数组|a|进行排序
     public static void sort(byte[] a) {
         DualPivotQuicksort.sort(a, 0, a.length - 1);
     }
@@ -324,6 +335,7 @@ public class Arrays {
      * @throws ArrayIndexOutOfBoundsException
      *     if {@code fromIndex < 0} or {@code toIndex > a.length}
      */
+    // 对数组|a|进行排序，索引范围是：[fromIndex,toIndex)
     public static void sort(byte[] a, int fromIndex, int toIndex) {
         rangeCheck(a.length, fromIndex, toIndex);
         DualPivotQuicksort.sort(a, fromIndex, toIndex - 1);
@@ -348,6 +360,7 @@ public class Arrays {
      *
      * @param a the array to be sorted
      */
+    // 对数组|a|进行排序
     public static void sort(float[] a) {
         DualPivotQuicksort.sort(a, 0, a.length - 1, null, 0, 0);
     }
@@ -380,6 +393,7 @@ public class Arrays {
      * @throws ArrayIndexOutOfBoundsException
      *     if {@code fromIndex < 0} or {@code toIndex > a.length}
      */
+    // 对数组|a|进行排序，索引范围是：[fromIndex,toIndex)
     public static void sort(float[] a, int fromIndex, int toIndex) {
         rangeCheck(a.length, fromIndex, toIndex);
         DualPivotQuicksort.sort(a, fromIndex, toIndex - 1, null, 0, 0);
@@ -404,6 +418,7 @@ public class Arrays {
      *
      * @param a the array to be sorted
      */
+    // 对数组|a|进行排序
     public static void sort(double[] a) {
         DualPivotQuicksort.sort(a, 0, a.length - 1, null, 0, 0);
     }
@@ -436,6 +451,7 @@ public class Arrays {
      * @throws ArrayIndexOutOfBoundsException
      *     if {@code fromIndex < 0} or {@code toIndex > a.length}
      */
+    // 对数组|a|进行排序，索引范围是：[fromIndex,toIndex)
     public static void sort(double[] a, int fromIndex, int toIndex) {
         rangeCheck(a.length, fromIndex, toIndex);
         DualPivotQuicksort.sort(a, fromIndex, toIndex - 1, null, 0, 0);
@@ -3176,10 +3192,10 @@ public class Arrays {
      * @throws NullPointerException if <tt>original</tt> is null
      * @since 1.6
      */
+    // 申请一块newLength长度的数组内存，他的数据拷贝自原始的original数组内容
+    // 这个函数一般用在数组的扩缩容场景中。即：将 original 数组扩缩容至 newLength 长度
     @SuppressWarnings("unchecked")
     public static <T> T[] copyOf(T[] original, int newLength) {
-        // 申请一块 newLength 长度的数组内存，他的数据拷贝自原始的 original 数组内容
-        // 这个函数一般用在数组的扩缩容场景中。即：将 original 数组扩缩容至 newLength 长度
         return (T[]) copyOf(original, newLength, original.getClass());
     }
 
@@ -3207,10 +3223,9 @@ public class Arrays {
      *     an array of class <tt>newType</tt>
      * @since 1.6
      */
+    // 申请一块 newLength 长度的数组内存，他的数据拷贝自原始的 original 数组内容。注：newType是数组的类型，不是数组元素的类型
+    // 这个函数一般用在数组的扩缩容场景中。即：将 original 数组扩缩容至 newLength 长度
     public static <T,U> T[] copyOf(U[] original, int newLength, Class<? extends T[]> newType) {
-        // 申请一块 newLength 长度的数组内存，他的数据拷贝自原始的 original 数组内容。注：newType是数组的类型，不是数组元素的类型
-        // 这个函数一般用在数组的扩缩容场景中。即：将 original 数组扩缩容至 newLength 长度
-
         // 当原始数组类型为Object[]时，可以直接使用new申请；若不是，则必须使用Array.newInstance进行申请，其参数是数组元素类型和数组长度
         @SuppressWarnings("unchecked")
         T[] copy = ((Object)newType == (Object)Object[].class)
