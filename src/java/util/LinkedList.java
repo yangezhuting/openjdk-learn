@@ -1143,6 +1143,7 @@ public class LinkedList<E>
         }
     }
 
+    // 返回列表容器的一个副本，但底层的链表节点与原始容器的链表节点是共享的
     @SuppressWarnings("unchecked")
     private LinkedList<E> superClone() {
         try {
@@ -1158,6 +1159,8 @@ public class LinkedList<E>
      *
      * @return a shallow copy of this {@code LinkedList} instance
      */
+    // 返回列表容器的一个副本。内部链表节点使用add逐个添加
+    // 注：克隆是按字节拷贝原始对象
     public Object clone() {
         LinkedList<E> clone = superClone();
 

@@ -389,7 +389,8 @@ public class ArrayList<E> extends AbstractList<E>
      *
      * @return a clone of this <tt>ArrayList</tt> instance
      */
-    // 返回列表容器的一个副本。内部Object[]数组会被自动拷贝。即，新建后复制，是按字节拷贝原始元素
+    // 返回列表容器的一个副本。内部Object[]数组会被自动拷贝
+    // 注：克隆是按字节拷贝原始对象
     public Object clone() {
         try {
             ArrayList<?> v = (ArrayList<?>) super.clone();

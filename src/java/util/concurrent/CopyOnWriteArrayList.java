@@ -88,6 +88,12 @@ import java.util.function.UnaryOperator;
  * @author Doug Lea
  * @param <E> the type of elements held in this collection
  */
+// CopyOnWriteArrayList这是一个ArrayList的线程安全的变体。它所有可变操作都是通过对底层数组进行一次新的复制来实现
+// 注1：它合适读多写少的场景。不过请谨慎使用，因为谁也没法保证CopyOnWriteArrayList到底要放置多少数据，万一数据稍微
+//     有点多，每次add/set都要重新复制数组，这个代价实在太高昂了。在高性能的互联网应用中，这种操作分分钟引起故障
+// 注2：它不存在扩容的概念，每次写操作都要复制一个副本，在副本的基础上修改后改变Array引用。所以写操作性能很差
+// 注3：它不能用于实时读的场景，像拷贝数组、新增元素都需要时间，所以调用一个set操作后，读取到数据可能还是旧的,虽然
+//     它能做到最终一致性，但是还是没法满足实时性要求
 public class CopyOnWriteArrayList<E>
     implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
     private static final long serialVersionUID = 8673264195747942595L;
@@ -96,6 +102,7 @@ public class CopyOnWriteArrayList<E>
     final transient ReentrantLock lock = new ReentrantLock();
 
     /** The array, accessed only via getArray/setArray. */
+    // 无锁编程，多线程共享变量需volatile特性
     private transient volatile Object[] array;
 
     /**
@@ -186,6 +193,7 @@ public class CopyOnWriteArrayList<E>
      * @param fence one past last index to search
      * @return index of element, or -1 if absent
      */
+    // 从|elements|中查找元素|o|的索引位置，起始查找索引为|index|
     private static int indexOf(Object o, Object[] elements,
                                int index, int fence) {
         if (o == null) {
@@ -403,6 +411,7 @@ public class CopyOnWriteArrayList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
     public E set(int index, E element) {
+        // 保证复制、更新原子性
         final ReentrantLock lock = this.lock;
         lock.lock();
         try {
@@ -410,6 +419,7 @@ public class CopyOnWriteArrayList<E>
             E oldValue = get(elements, index);
 
             if (oldValue != element) {
+                // 创建底层数组的新副本，在副本上更新数据后，替换底层数组的引用
                 int len = elements.length;
                 Object[] newElements = Arrays.copyOf(elements, len);
                 newElements[index] = element;
@@ -431,9 +441,11 @@ public class CopyOnWriteArrayList<E>
      * @return {@code true} (as specified by {@link Collection#add})
      */
     public boolean add(E e) {
+        // 保证复制、更新原子性
         final ReentrantLock lock = this.lock;
         lock.lock();
         try {
+            // 创建底层数组的新副本，在副本上新增数据后，替换底层数组的引用
             Object[] elements = getArray();
             int len = elements.length;
             Object[] newElements = Arrays.copyOf(elements, len + 1);
@@ -453,9 +465,11 @@ public class CopyOnWriteArrayList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
     public void add(int index, E element) {
+        // 保证复制、更新原子性
         final ReentrantLock lock = this.lock;
         lock.lock();
         try {
+            // 创建底层数组的新副本，在副本上新增数据后，替换底层数组的引用
             Object[] elements = getArray();
             int len = elements.length;
             if (index > len || index < 0)
@@ -486,9 +500,11 @@ public class CopyOnWriteArrayList<E>
      * @throws IndexOutOfBoundsException {@inheritDoc}
      */
     public E remove(int index) {
+        // 保证复制、更新原子性
         final ReentrantLock lock = this.lock;
         lock.lock();
         try {
+            // 创建底层数组的新副本，在副本上删除数据后，替换底层数组的引用
             Object[] elements = getArray();
             int len = elements.length;
             E oldValue = get(elements, index);
@@ -522,6 +538,7 @@ public class CopyOnWriteArrayList<E>
      * @return {@code true} if this list contained the specified element
      */
     public boolean remove(Object o) {
+        // 保存镜像，从镜像中查找待删除元素的索引
         Object[] snapshot = getArray();
         int index = indexOf(o, snapshot, 0, snapshot.length);
         return (index < 0) ? false : remove(o, snapshot, index);
@@ -532,12 +549,16 @@ public class CopyOnWriteArrayList<E>
      * recent snapshot contains o at the given index.
      */
     private boolean remove(Object o, Object[] snapshot, int index) {
+        // 保证复制、更新原子性
         final ReentrantLock lock = this.lock;
         lock.lock();
         try {
             Object[] current = getArray();
             int len = current.length;
+            // 当镜像与当前的数组不相同时，说明删除期间数据有变动，外部传递的|index|不在有效
             if (snapshot != current) findIndex: {
+                // 优化算法：只遍历到|index|位置进行查找
+                // 注：加快了在删除期间，其他线程删除了|index|前的元素；或者在删除期间，在|index|前新增了与|o|相等的元素
                 int prefix = Math.min(index, len);
                 for (int i = 0; i < prefix; i++) {
                     if (current[i] != snapshot[i] && eq(o, current[i])) {
@@ -545,14 +566,19 @@ public class CopyOnWriteArrayList<E>
                         break findIndex;
                     }
                 }
+                // 越界了。发生在待删除的元素原始在末尾，并且它已经被删除
                 if (index >= len)
                     return false;
+                // 已查找到待删除的元素
                 if (current[index] == o)
                     break findIndex;
+                // 重新从|index|起始开始查找元素|o|的索引
+                // 注：说明在删除期间，其他线程在|index|前新增了元素，使原本|index|的元素后移了
                 index = indexOf(o, current, index, len);
                 if (index < 0)
                     return false;
             }
+            // 删除指定索引元素：先复制，后更新
             Object[] newElements = new Object[len - 1];
             System.arraycopy(current, 0, newElements, 0, index);
             System.arraycopy(current, index + 1,
@@ -578,6 +604,7 @@ public class CopyOnWriteArrayList<E>
      *         ({@code fromIndex < 0 || toIndex > size() || toIndex < fromIndex})
      */
     void removeRange(int fromIndex, int toIndex) {
+        // 保证复制、更新原子性
         final ReentrantLock lock = this.lock;
         lock.lock();
         try {
@@ -586,6 +613,7 @@ public class CopyOnWriteArrayList<E>
 
             if (fromIndex < 0 || toIndex > len || toIndex < fromIndex)
                 throw new IndexOutOfBoundsException();
+            // 创建底层数组的新副本，在副本上删除数据后，替换底层数组的引用
             int newlen = len - (toIndex - fromIndex);
             int numMoved = len - toIndex;
             if (numMoved == 0)
@@ -608,7 +636,9 @@ public class CopyOnWriteArrayList<E>
      * @param e element to be added to this list, if absent
      * @return {@code true} if the element was added
      */
+    // 不存在时添加元素
     public boolean addIfAbsent(E e) {
+        // 保存镜像，从镜像中查找是否添加元素|e|
         Object[] snapshot = getArray();
         return indexOf(e, snapshot, 0, snapshot.length) >= 0 ? false :
             addIfAbsent(e, snapshot);
@@ -619,20 +649,26 @@ public class CopyOnWriteArrayList<E>
      * recent snapshot does not contain e.
      */
     private boolean addIfAbsent(E e, Object[] snapshot) {
+        // 保证复制、更新原子性
         final ReentrantLock lock = this.lock;
         lock.lock();
         try {
             Object[] current = getArray();
             int len = current.length;
+            // 当镜像与当前的数组不相同时，说明添加期间数据有变动
             if (snapshot != current) {
                 // Optimize for lost race to another addXXX operation
+                // 优化算法：只遍历到|snapshot.length| 与 |len| 较小者位置进行查找
+                // 注：加快了在添加期间，其他线程添加|e|元素
                 int common = Math.min(snapshot.length, len);
                 for (int i = 0; i < common; i++)
                     if (current[i] != snapshot[i] && eq(e, current[i]))
                         return false;
+                // 重新查找元素|e|的索引
                 if (indexOf(e, current, common, len) >= 0)
                         return false;
             }
+            // 添加元素：先复制，后更新
             Object[] newElements = Arrays.copyOf(current, len + 1);
             newElements[len] = e;
             setArray(newElements);

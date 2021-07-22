@@ -932,6 +932,8 @@ public class ArrayDeque<E> extends AbstractCollection<E>
      *
      * @return a copy of this deque
      */
+    // 返回列表容器的一个副本。内部Object[]数组会被自动拷贝
+    // 注：克隆是按字节拷贝原始对象
     public ArrayDeque<E> clone() {
         try {
             @SuppressWarnings("unchecked")
