@@ -430,6 +430,7 @@ public final class Integer extends Number implements Comparable<Integer> {
      *
      * Will fail if i == Integer.MIN_VALUE
      */
+    // 将十进制数|i|，转成字符串放入容量为|index|的|buf|数组中。右对齐！！！
     static void getChars(int i, int index, char[] buf) {
         int q, r;
         int charPos = index;
@@ -1392,6 +1393,10 @@ public final class Integer extends Number implements Comparable<Integer> {
      *     is equal to zero.
      * @since 1.5
      */
+    // 此方法以指定的int值的二进制补码表示形式返回highest-order set-bit之前的零位；如果该值等于零，则返回32
+    // 算法：返回无符号整数|i|的最高非0位前面的0的个数，包括符号位在内；如果|i|为负数，这个方法将会返回0，符号位为1
+    // 比如：10的二进制表示为（java的整型长度为32位） 0000 0000 0000 0000 0000 0000 0000 1010
+    // 那么这个方法返回的就是28
     public static int numberOfLeadingZeros(int i) {
         // HD, Figure 5-6
         if (i == 0)

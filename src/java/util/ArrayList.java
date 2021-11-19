@@ -105,6 +105,7 @@ import java.util.function.UnaryOperator;
 
 // 可高效的进行随机访问（按索引访问）的列表结构。实现了 List,RandomAccess 接口。底层基于数组实现
 // 注：与LinkedList相比，随机访问效率更高，但频繁的插入、删除效率欠佳，因为这可能会导致底层数组的扩容（内存要重新分配及拷贝）
+// 注：除非用户手动调用trimToSize，否则容器不会主动缩容
 public class ArrayList<E> extends AbstractList<E>
         implements List<E>, RandomAccess, Cloneable, java.io.Serializable
 {
@@ -119,7 +120,7 @@ public class ArrayList<E> extends AbstractList<E>
     /**
      * Shared empty array instance used for empty instances.
      */
-    // 全局共享的空元素数组
+    // 全局共享的空元素数组。多用于数组被手动清空的场景
     private static final Object[] EMPTY_ELEMENTDATA = {};
 
     /**
@@ -136,7 +137,7 @@ public class ArrayList<E> extends AbstractList<E>
      * empty ArrayList with elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA
      * will be expanded to DEFAULT_CAPACITY when the first element is added.
      */
-    // 实际元素存储容器
+    // 实际元素存储的容器
     transient Object[] elementData; // non-private to simplify nested class access
 
     /**
@@ -258,7 +259,7 @@ public class ArrayList<E> extends AbstractList<E>
         modCount++;
 
         // overflow-conscious code
-        // 此处拷贝了溢出风险。即，除了真正的需要扩容场景中，当|minCapacity|为负数，两个整数之和溢出4字节，结果也将大于0
+        // 此处考虑了溢出风险。即，除了真正的需要扩容场景中，当|minCapacity|为负数，两个整数之和溢出4字节，结果也将大于0
         if (minCapacity - elementData.length > 0)
             grow(minCapacity);
     }
@@ -269,6 +270,8 @@ public class ArrayList<E> extends AbstractList<E>
      * Attempts to allocate larger arrays may result in
      * OutOfMemoryError: Requested array size exceeds VM limit
      */
+    // 数组对象对比普通的类有一个额外的元数据，用于表示数组的大小
+    // 数组的最大尺寸为2^31，但是需要8bytes的存储大小表示数组的长度等元数据，所以数组的大小定义为Integer.MAX_VALUE-8
     private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
 
     /**
@@ -389,8 +392,8 @@ public class ArrayList<E> extends AbstractList<E>
      *
      * @return a clone of this <tt>ArrayList</tt> instance
      */
-    // 返回列表容器的一个副本。内部Object[]数组会被自动拷贝
-    // 注：克隆是按字节拷贝原始对象
+    // 返回列表容器的一个副本。内部Object[]数组会被拷贝
+    // 注：克隆是按字节拷贝原始对象，数组需要单独处理
     public Object clone() {
         try {
             ArrayList<?> v = (ArrayList<?>) super.clone();

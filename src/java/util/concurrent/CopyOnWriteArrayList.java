@@ -88,11 +88,11 @@ import java.util.function.UnaryOperator;
  * @author Doug Lea
  * @param <E> the type of elements held in this collection
  */
-// CopyOnWriteArrayList这是一个ArrayList的线程安全的变体。它所有可变操作都是通过对底层数组进行一次新的复制来实现
-// 注1：它合适读多写少的场景。不过请谨慎使用，因为谁也没法保证CopyOnWriteArrayList到底要放置多少数据，万一数据稍微
+// CopyOnWriteArrayList这是一个ArrayList的线程安全的容器。它所有可变操作都是通过对底层数组进行一次新的复制来实现
+// 注1：它合适读多写少的场景。不过请谨慎使用，因为谁也没法保证CopyOnWriteArrayList到底要放置多少数据。如果数据稍微
 //     有点多，每次add/set都要重新复制数组，这个代价实在太高昂了。在高性能的互联网应用中，这种操作分分钟引起故障
-// 注2：它不存在扩容的概念，每次写操作都要复制一个副本，在副本的基础上修改后改变Array引用。所以写操作性能很差
-// 注3：它不能用于实时读的场景，像拷贝数组、新增元素都需要时间，所以调用一个set操作后，读取到数据可能还是旧的,虽然
+// 注2：它不存在扩容的概念。每次写操作都要复制一个副本，在副本的基础上修改后改变Array引用。所以写操作性能很差
+// 注3：它不能用于实时读的场景。像拷贝数组、新增元素都需要时间，所以调用一个set操作后，读取到数据可能还是旧的,虽然
 //     它能做到最终一致性，但是还是没法满足实时性要求
 public class CopyOnWriteArrayList<E>
     implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
@@ -305,11 +305,14 @@ public class CopyOnWriteArrayList<E>
      *
      * @return a clone of this list
      */
+    // 返回列表容器的一个"引用副本"。即，内部Object[]数组并未被拷贝。谨记：写时才复制
+    // 注：克隆是按字节拷贝原始对象
     public Object clone() {
         try {
             @SuppressWarnings("unchecked")
             CopyOnWriteArrayList<E> clone =
                 (CopyOnWriteArrayList<E>) super.clone();
+            // 重置锁状态
             clone.resetLock();
             return clone;
         } catch (CloneNotSupportedException e) {

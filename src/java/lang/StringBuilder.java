@@ -73,6 +73,8 @@ package java.lang;
  * @see         java.lang.String
  * @since       1.5
  */
+
+// 非线程安全版本的字符串拼接构建器。相比线程安全版本的StringBuffer性能更好
 public final class StringBuilder
     extends AbstractStringBuilder
     implements java.io.Serializable, CharSequence
@@ -97,6 +99,8 @@ public final class StringBuilder
      * @throws     NegativeArraySizeException  if the {@code capacity}
      *               argument is less than {@code 0}.
      */
+    // 此处用户可能会指定长度为0的容量。可能会有底层分配了长度为0的char字符数组场景
+    // 这直接影响了扩容expandCapacity()的长度计算：会有一个"奇怪"的+2冗余量
     public StringBuilder(int capacity) {
         super(capacity);
     }

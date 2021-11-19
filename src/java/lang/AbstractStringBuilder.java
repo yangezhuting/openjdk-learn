@@ -126,6 +126,8 @@ abstract class AbstractStringBuilder implements Appendable, CharSequence {
      * size check or synchronization.
      */
     void expandCapacity(int minimumCapacity) {
+        // 由于容量可能会被用户手动指定为0，故而底层的char字符数组可能为0。如果没有这个"奇怪"的+2冗
+        // 余量，|newCapacity|结果依旧是0
         int newCapacity = value.length * 2 + 2;
         if (newCapacity - minimumCapacity < 0)
             newCapacity = minimumCapacity;
@@ -144,6 +146,7 @@ abstract class AbstractStringBuilder implements Appendable, CharSequence {
      * Calling this method may, but is not required to, affect the value
      * returned by a subsequent call to the {@link #capacity()} method.
      */
+    // 将容量缩小到实际元素个数
     public void trimToSize() {
         if (count < value.length) {
             value = Arrays.copyOf(value, count);
@@ -641,6 +644,7 @@ abstract class AbstractStringBuilder implements Appendable, CharSequence {
             append("-2147483648");
             return this;
         }
+        // 计算十进制|i|占用的字符长度
         int appendedLength = (i < 0) ? Integer.stringSize(-i) + 1
                                      : Integer.stringSize(i);
         int spaceNeeded = count + appendedLength;
@@ -667,6 +671,7 @@ abstract class AbstractStringBuilder implements Appendable, CharSequence {
             append("-9223372036854775808");
             return this;
         }
+        // 计算十进制|i|占用的字符长度
         int appendedLength = (l < 0) ? Long.stringSize(-l) + 1
                                      : Long.stringSize(l);
         int spaceNeeded = count + appendedLength;
