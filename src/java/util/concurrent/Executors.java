@@ -500,6 +500,7 @@ public class Executors {
     /**
      * A callable that runs given task and returns given result
      */
+    // 将|Runnable|类型的对象适配成|Callable|类型。即由外部传递进"接受返回值"的对象引用
     static final class RunnableAdapter<T> implements Callable<T> {
         final Runnable task;
         final T result;
@@ -509,6 +510,8 @@ public class Executors {
         }
         public T call() {
             task.run();
+            // 任务执行结束，直接返回包装时提供的|result|参数，作为|task|返回值
+            // 注：这意味着，任务结果（|Runnable|没有返回值），必须由客户端（用户）在|task|中设置到|result|引用上
             return result;
         }
     }

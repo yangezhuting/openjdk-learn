@@ -817,6 +817,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * waiting for a straggler task to finish.
      */
     // 至少中断一个空闲的工作线程
+    // 注：要想真正的实现：一个任务被中断后，不在执行，需要客户端（用户）在任务实现中去检查线程中断状态
     private void interruptIdleWorkers(boolean onlyOne) {
         final ReentrantLock mainLock = this.mainLock;
         mainLock.lock();
@@ -1616,6 +1617,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         return runStateAtLeast(ctl.get(), TERMINATED);
     }
 
+    // 等待，直到线程池终止
     public boolean awaitTermination(long timeout, TimeUnit unit)
         throws InterruptedException {
         long nanos = unit.toNanos(timeout);
@@ -1625,8 +1627,10 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
             for (;;) {
                 if (runStateAtLeast(ctl.get(), TERMINATED))
                     return true;
+                // 超时后，线程池还未终止，返回false
                 if (nanos <= 0)
                     return false;
+                // 阻塞等待
                 nanos = termination.awaitNanos(nanos);
             }
         } finally {
@@ -1699,20 +1703,25 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * @throws IllegalArgumentException if {@code corePoolSize < 0}
      * @see #getCorePoolSize
      */
+    // 实时调整核心工作线程数量
     public void setCorePoolSize(int corePoolSize) {
         if (corePoolSize < 0)
             throw new IllegalArgumentException();
         int delta = corePoolSize - this.corePoolSize;
         this.corePoolSize = corePoolSize;
-        if (workerCountOf(ctl.get()) > corePoolSize)
+        if (workerCountOf(ctl.get()) > corePoolSize)    // 收缩核心线程数量，回收所有空闲的线程
             interruptIdleWorkers();
-        else if (delta > 0) {
+        else if (delta > 0) {   // 扩大核心线程数量
             // We don't really know how many new threads are "needed".
             // As a heuristic, prestart enough new workers (up to new
             // core size) to handle the current number of tasks in
             // queue, but stop if queue becomes empty while doing so.
+
+            // 取核心线程的增量和任务队列长度的最小值，作为工作线程最后的增量
+            // 注：工作线程多于任务队列长度，可能造成资源浪费
             int k = Math.min(delta, workQueue.size());
             while (k-- > 0 && addWorker(null, true)) {
+                // 可能在增加"消费"工作线程过程中，队列已被消费完成，立即结束添加，以免造成不必要的浪费
                 if (workQueue.isEmpty())
                     break;
             }
@@ -1746,6 +1755,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * Same as prestartCoreThread except arranges that at least one
      * thread is started even if corePoolSize is 0.
      */
+    // 确保线程池中至少有一个工作线程被启动
     void ensurePrestart() {
         int wc = workerCountOf(ctl.get());
         if (wc < corePoolSize)
@@ -1761,6 +1771,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      *
      * @return the number of threads started
      */
+    // 预启动线程池中所有的核心工作线程
     public int prestartAllCoreThreads() {
         int n = 0;
         while (addWorker(null, true))
@@ -1802,6 +1813,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      *
      * @since 1.6
      */
+    // 当|value==true|时，设置核心线程超过空闲时间，也将被回收
+    // 注：线程池必须已经设置了不为0的超时时间
     public void allowCoreThreadTimeOut(boolean value) {
         if (value && keepAliveTime <= 0)
             throw new IllegalArgumentException("Core threads must have nonzero keep alive times");
@@ -1824,10 +1837,12 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      *         less than the {@linkplain #getCorePoolSize core pool size}
      * @see #getMaximumPoolSize
      */
+    // 实时调整最大工作线程数量
     public void setMaximumPoolSize(int maximumPoolSize) {
         if (maximumPoolSize <= 0 || maximumPoolSize < corePoolSize)
             throw new IllegalArgumentException();
         this.maximumPoolSize = maximumPoolSize;
+        // 收缩最大线程数量的限制，回收所有空闲的线程
         if (workerCountOf(ctl.get()) > maximumPoolSize)
             interruptIdleWorkers();
     }
@@ -1856,6 +1871,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      *         if {@code time} is zero and {@code allowsCoreThreadTimeOut}
      * @see #getKeepAliveTime(TimeUnit)
      */
+    // 实时调整工作线程最大空闲时间限制
     public void setKeepAliveTime(long time, TimeUnit unit) {
         if (time < 0)
             throw new IllegalArgumentException();
@@ -1864,7 +1880,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         long keepAliveTime = unit.toNanos(time);
         long delta = keepAliveTime - this.keepAliveTime;
         this.keepAliveTime = keepAliveTime;
-        if (delta < 0)
+        if (delta < 0)  // 缩小了最大空闲时间限制，回收所有空闲的线程
             interruptIdleWorkers();
     }
 
@@ -1927,6 +1943,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * However, this method may fail to remove tasks in
      * the presence of interference by other threads.
      */
+    // 删除所有已经被取消的|Future|类型的任务
     public void purge() {
         final BlockingQueue<Runnable> q = workQueue;
         try {
@@ -1974,6 +1991,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      *
      * @return the number of threads
      */
+    // 获取所有活动的工作线程数量
     public int getActiveCount() {
         final ReentrantLock mainLock = this.mainLock;
         mainLock.lock();

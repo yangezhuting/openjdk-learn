@@ -104,10 +104,11 @@ package java.util.concurrent;
  *         use(result);
  * }}</pre>
  */
+// 包装ExecutorService执行器服务，使其能自动检测到已完成的任务
 public class ExecutorCompletionService<V> implements CompletionService<V> {
     private final Executor executor;
     private final AbstractExecutorService aes;
-    private final BlockingQueue<Future<V>> completionQueue;
+    private final BlockingQueue<Future<V>> completionQueue; // 存放已执行完成任务的队列。由|QueueingFuture.done()|添加
 
     /**
      * FutureTask extension to enqueue upon completion
@@ -117,6 +118,7 @@ public class ExecutorCompletionService<V> implements CompletionService<V> {
             super(task, null);
             this.task = task;
         }
+        // 当一个任务执行完成，总是会执行|FutureTask.finishCompletion|，其中在执行方法|done()|
         protected void done() { completionQueue.add(task); }
         private final Future<V> task;
     }
@@ -177,14 +179,23 @@ public class ExecutorCompletionService<V> implements CompletionService<V> {
 
     public Future<V> submit(Callable<V> task) {
         if (task == null) throw new NullPointerException();
+        // 由|Callable|新建一个|FutureTask|对象，并将其返回
+        // 注：其中|Callable|会被|FutureTask|重写的run()方法执行，其返回值广播给所有"结果等待者"
         RunnableFuture<V> f = newTaskFor(task);
+        // 向执行器添加|QueueingFuture|类型的|FutureTask|
+        // 注：|QueueingFuture|重写了|FutureTask.done()|，以实现任务完成时，自动添加到|completionQueue|队列
         executor.execute(new QueueingFuture(f));
         return f;
     }
 
     public Future<V> submit(Runnable task, V result) {
         if (task == null) throw new NullPointerException();
+        // 由|Runnable|和|result|新建一个|FutureTask|对象，并将其返回
+        // 注：其中|Runnable|会被|FutureTask|重写的run()方法执行，然后直接将|result|广播给所有"结果等待者"
+        // 这就意味着：任务的结果（|Runnable|没有返回值），必须由客户端（用户）在|task|中设置到|result|引用上
         RunnableFuture<V> f = newTaskFor(task, result);
+        // 向执行器添加|QueueingFuture|类型的|FutureTask|
+        // 注：|QueueingFuture|重写了|FutureTask.done()|，以实现任务完成时，自动添加到|completionQueue|队列
         executor.execute(new QueueingFuture(f));
         return f;
     }
