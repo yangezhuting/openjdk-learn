@@ -281,6 +281,12 @@ public class ReentrantLock implements Lock, java.io.Serializable {
      * purposes and lies dormant until the lock has been acquired,
      * at which time the lock hold count is set to one.
      */
+    // 获取锁
+    // 1.如果该锁没有被另一个线程持有，则获取该锁并立即返回，将锁的持锁计数器设置为1
+    // 2.如果当前线程已经持有该锁，则将持锁计数器加1，并且该方法立即返回。即，可重入锁
+    // 3.如果该锁被另一个线程持有，则在获得锁之前，该线程将一直处于休眠状态，此时锁的
+    // 持有计数器被设置为1
+    // 注：lock()方法：在获取不到锁时，线程会一直阻塞，直到获取到锁为止
     public void lock() {
         sync.lock();
     }
@@ -331,6 +337,21 @@ public class ReentrantLock implements Lock, java.io.Serializable {
      *
      * @throws InterruptedException if the current thread is interrupted
      */
+    // 1.如果当前线程未被中断，则获取锁
+    // 2.如果该锁没有被另一个线程持有，则获取该锁并立即返回，将锁的保持计数器设置为1
+    // 3.如果当前线程已经持有该锁，则将持锁计数器加1，并且该方法立即返回。即，可重入锁
+    // 4.如果锁被另一个线程持有，则在发生以下两种情况之一以前，该线程将一直处于休眠状态
+    //      1).锁由当前线程获得；或者
+    //      2).其他某个线程中断当前线程
+    // 5.如果当前线程获得该锁，则将持锁计数器设置为1。如果当前线程：
+    //      1).在进入此方法时已经设置了该线程的中断状态；或者
+    //      2).在等待获取锁的同时被中断
+    //  则抛出 InterruptedException，并且清除当前线程的已中断状态
+    // 6.在此实现中，因为此方法是一个显式中断点，优先考虑了响应中断，而不是响应锁的普通获
+    // 取或重入获取。注：后者说的是|lock()|
+    // 注：线程在获取锁时被阻塞，如果发生了中断，则“此线程会被唤醒并抛出InterruptedException”，
+    // 如果线程已经被中断，再使用lockInterruptibly的时候，此线程也会抛出InterruptedException
+    // 注：lockInterruptibly()方法：在获取不到锁时，线程会一直阻塞，直到获取到锁或者线程被中断
     public void lockInterruptibly() throws InterruptedException {
         sync.acquireInterruptibly(1);
     }
@@ -361,6 +382,14 @@ public class ReentrantLock implements Lock, java.io.Serializable {
      *         current thread, or the lock was already held by the current
      *         thread; and {@code false} otherwise
      */
+    // 仅在调用时锁未被另一个线程持有的情况下，才获取该锁
+    // 1.如果该锁没有被另一个线程持有，并且立即返回true值，则将锁的持有计数器设置为1。即使已将此锁
+    // 设置为使用公平排序策略，但是调用 tryLock() 仍将立即获取锁（如果有可用的），而不管其他线程当
+    // 前是否正在等待该锁。在某些情况下，此“闯入”行为可能很有用，即使它会打破公平性也如此。如果希望遵
+    // 守此锁的公平设置，则使用 tryLock(0, TimeUnit.SECONDS)，它几乎是等效的（也检测中断）
+    // 2.如果当前线程已经持有此锁，则将保持计数器加1，该方法将返回true
+    // 3.如果锁被另一个线程持有，则此方法将立即返回false
+    // 注：tryLock()方法：获取到锁就返回true，不然返回false；该方法不会被阻塞
     public boolean tryLock() {
         return sync.nonfairTryAcquire(1);
     }

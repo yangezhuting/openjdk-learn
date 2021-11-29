@@ -316,6 +316,9 @@ import java.util.*;
  * @since 1.5
  * @author Doug Lea
  */
+// 底层线程池实现
+// 精华：每个工作线程Worker对象使用一个|state|来表示线程忙闲状态；使用中断机制控制工作线程/线程池
+// 的退出；使用阻塞队列的|poll()|限时接口，实现工作线程最大空闲时间限制的特性
 public class ThreadPoolExecutor extends AbstractExecutorService {
     /**
      * The main pool control state, ctl, is an atomic integer packing
@@ -669,7 +672,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
 
         void interruptIfStarted() {
             Thread t;
-            // 线程刚创建，还未启动时，状态会被设置为-1
+            // 线程刚创建，还未启动时，状态会被设置为-1，此时不允许中断。其他无论空闲、忙碌，都将被中断
             if (getState() >= 0 && (t = thread) != null && !t.isInterrupted()) {
                 try {
                     t.interrupt();
@@ -968,8 +971,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                 // CAS尝试增加线程数，如果失败，证明有竞争，那么重新增加计数器
                 if (compareAndIncrementWorkerCount(c))
                     break retry;
-                c = ctl.get();  // Re-read ctl
                 // 重新增加计数器时，若线程池状态此时有变更，则需重新到retry，以重现检查线程池的状态
+                // 注：多线程下，此处不会有ABA问题，因为线程池状态是不会出现"回退"
+                c = ctl.get();  // Re-read ctl
                 if (runStateOf(c) != rs)
                     continue retry;
                 // else CAS failed due to workerCount change; retry inner loop
@@ -1507,6 +1511,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         if (isRunning(c) && workQueue.offer(command)) {
             int recheck = ctl.get();
             // 添加队列成功，再次做状态检测，若线程池已被关闭，将新增的任务移除，并执行拒绝逻辑
+            // 注：多线程下，此处不会有ABA问题，因为线程池状态是不会出现"回退"
             if (! isRunning(recheck) && remove(command))
                 // 执行拒绝逻辑：默认是抛出异常、也可以设置为直接在提交任务的线程"就地"执行任务
                 reject(command);

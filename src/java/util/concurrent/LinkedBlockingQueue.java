@@ -77,6 +77,8 @@ import java.util.function.Consumer;
  * @author Doug Lea
  * @param <E> the type of elements held in this collection
  */
+// 链表阻塞队列，先进先出FIFO
+// 精华：头引用指向的节点中的元素始终指向null。非常巧妙的实现线程安全
 public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         implements BlockingQueue<E>, java.io.Serializable {
     private static final long serialVersionUID = -6903933977591709194L;
@@ -119,6 +121,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
     /**
      * Linked list node class
      */
+    // 单向链表节点
     static class Node<E> {
         E item;
 
@@ -134,22 +137,29 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /** The capacity bound, or Integer.MAX_VALUE if none */
+    // 阻塞队列最大容量
     private final int capacity;
 
     /** Current number of elements */
+    // 阻塞队列中已添加的元素个数
     private final AtomicInteger count = new AtomicInteger();
 
     /**
      * Head of linked list.
      * Invariant: head.item == null
      */
-    transient Node<E> head;
+    // 消费指针。头引用指向的节点中的元素始终指向null，相当于是一个"空节点"
+    // 注：在本阻塞队列算法中，使用了不同的互斥锁来保护生产、消费动作。该"空节点"可以让线程
+    // 安全简单化：当队列中存在一个以上的节点，|head|和|last|指向就不可能相同，而生产、消
+    // 费算法中，会去修改各自的指针，也就不会有线程安全问题
+    transient Node<E> head; // 头节点指针
 
     /**
      * Tail of linked list.
      * Invariant: last.next == null
      */
-    private transient Node<E> last;
+    // 生产指针。尾引用的后驱节点始终是一个null
+    private transient Node<E> last; // 尾节点指针
 
     /** Lock held by take, poll, etc */
     private final ReentrantLock takeLock = new ReentrantLock();
@@ -158,6 +168,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
     private final Condition notEmpty = takeLock.newCondition();
 
     /** Lock held by put, offer, etc */
+    // 新增元素到队列中的互斥锁
     private final ReentrantLock putLock = new ReentrantLock();
 
     /** Wait queue for waiting puts */
@@ -171,6 +182,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         final ReentrantLock takeLock = this.takeLock;
         takeLock.lock();
         try {
+            // 注："通知"而非"广播"。生产者-消费者模式典型用法
             notEmpty.signal();
         } finally {
             takeLock.unlock();
@@ -184,6 +196,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         final ReentrantLock putLock = this.putLock;
         putLock.lock();
         try {
+            // 注："通知"而非"广播"。生产者-消费者模式典型用法
             notFull.signal();
         } finally {
             putLock.unlock();
@@ -195,6 +208,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      *
      * @param node the node
      */
+    // 尾部添加元素。外部必须要持有生产锁
     private void enqueue(Node<E> node) {
         // assert putLock.isHeldByCurrentThread();
         // assert last.next == null;
@@ -206,12 +220,21 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      *
      * @return the node
      */
+    // 头部取走元素。外部至少要持有消费锁
     private E dequeue() {
         // assert takeLock.isHeldByCurrentThread();
         // assert head.item == null;
+
+        // 把当前头节点删除（一定是一个空节点。从以上|assert|语句也可以看出）
+        // 注：头元素要么是初始化时的空节点，要么是已被消费的空节点
         Node<E> h = head;
         Node<E> first = h.next;
         h.next = h; // help GC
+
+        // 将头节点指向将要被消费的节点，然后设置其为新的空节点，并将其中的存储的元素值返回
+        // 注：在本阻塞队列算法中，使用了不同的互斥锁来保护生产、消费动作。该"空节点"可以让线程
+        // 安全简单化：当队列中存在一个以上的节点，|head|和|last|指向就不可能相同，而生产、消
+        // 费算法中，会去修改各自的指针，也就不会有线程安全问题
         head = first;
         E x = first.item;
         first.item = null;
@@ -246,6 +269,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * Creates a {@code LinkedBlockingQueue} with a capacity of
      * {@link Integer#MAX_VALUE}.
      */
+    // 构造一个无界的（|Integer.MAX_VALUE|长度限制）阻塞队列
     public LinkedBlockingQueue() {
         this(Integer.MAX_VALUE);
     }
@@ -257,9 +281,14 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * @throws IllegalArgumentException if {@code capacity} is not greater
      *         than zero
      */
+    // 构造一个有界的（|capacity|长度限制）阻塞队列
     public LinkedBlockingQueue(int capacity) {
         if (capacity <= 0) throw new IllegalArgumentException();
         this.capacity = capacity;
+        // 初始化头、尾节点到一个"空元素"的节点
+        // 注：在本阻塞队列算法中，使用了不同的互斥锁来保护生产、消费动作。该"空节点"可以让线程
+        // 安全简单化：当队列中存在一个以上的节点，|head|和|last|指向就不可能相同，而生产、消
+        // 费算法中，会去修改各自的指针，也就不会有线程安全问题
         last = head = new Node<E>(null);
     }
 
@@ -273,6 +302,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * @throws NullPointerException if the specified collection or any
      *         of its elements are null
      */
+    // 构造一个无界的（|Integer.MAX_VALUE|长度限制）阻塞队列。初始元素为集合|c|中的元素
     public LinkedBlockingQueue(Collection<? extends E> c) {
         this(Integer.MAX_VALUE);
         final ReentrantLock putLock = this.putLock;
@@ -282,8 +312,10 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
             for (E e : c) {
                 if (e == null)
                     throw new NullPointerException();
+                // 超过最大容量限制，抛出异常
                 if (n == capacity)
                     throw new IllegalStateException("Queue full");
+                // 将元素插入到队列（链表）尾部
                 enqueue(new Node<E>(e));
                 ++n;
             }
@@ -328,6 +360,8 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * @throws InterruptedException {@inheritDoc}
      * @throws NullPointerException {@inheritDoc}
      */
+    // 阻塞生产一个元素。除非中断，否则方法会阻塞直到能生产一个元素为止
+    // 注：除非有中断，否则总是阻塞到能生产一个元素
     public void put(E e) throws InterruptedException {
         if (e == null) throw new NullPointerException();
         // Note: convention in all put/take/etc is to preset local var
@@ -336,6 +370,9 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         Node<E> node = new Node<E>(e);
         final ReentrantLock putLock = this.putLock;
         final AtomicInteger count = this.count;
+
+        // 获取生产锁。在获取不到锁时，线程会一直阻塞，直到获取到锁或者线程被中断
+        // 注：可能会抛出|InterruptedException|异常
         putLock.lockInterruptibly();
         try {
             /*
@@ -346,16 +383,22 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
              * signalled if it ever changes from capacity. Similarly
              * for all other uses of count in other wait guards.
              */
+            // 队列中没有多余的空间待添加。监听在"非满"的条件变量上
+            // 注：消费者会在队列从满转变到非满时，发生"非满"通知
             while (count.get() == capacity) {
                 notFull.await();
             }
+            // 将元素插入到队列（链表）尾部
             enqueue(node);
             c = count.getAndIncrement();
+            // 生产者每添加一个元素，就检测队列是否已满，若"非满"，则发送一个"非满"的通知
             if (c + 1 < capacity)
                 notFull.signal();
         } finally {
             putLock.unlock();
         }
+        // 若是从空队列添加了一个元素，发送"非空"通知
+        // 注：程序不会每添加一个元素就发送一个"非空"的通知。因为消费者只在空队列时，阻塞监听在|notEmpty|上
         if (c == 0)
             signalNotEmpty();
     }
@@ -369,6 +412,8 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * @throws InterruptedException {@inheritDoc}
      * @throws NullPointerException {@inheritDoc}
      */
+    // 阻塞生产一个元素。除非中断、或者阻塞|timeout|时长后队列仍然是满的，否则方法会阻塞直到能生产一个元素为止
+    // 如果队列已满，包括阻塞|timeout|时长后仍然是满的，则立即返回false
     public boolean offer(E e, long timeout, TimeUnit unit)
         throws InterruptedException {
 
@@ -377,20 +422,27 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         int c = -1;
         final ReentrantLock putLock = this.putLock;
         final AtomicInteger count = this.count;
+
+        // 获取生产锁。在获取不到锁时，线程会一直阻塞，直到获取到锁或者线程被中断
+        // 注：可能会抛出|InterruptedException|异常
         putLock.lockInterruptibly();
         try {
+            // 队列已满
             while (count.get() == capacity) {
                 if (nanos <= 0)
-                    return false;
-                nanos = notFull.awaitNanos(nanos);
+                    return false;   // 阻塞|timeout|时长后队列仍然是满的，返回false
+                nanos = notFull.awaitNanos(nanos);  // 阻塞，直到"非满"通知的到来、或者超时返回
             }
             enqueue(new Node<E>(e));
             c = count.getAndIncrement();
+            // 生产者每添加一个元素，就检测队列是否已满，若"非满"，则发送一个"非满"的通知
             if (c + 1 < capacity)
                 notFull.signal();
         } finally {
             putLock.unlock();
         }
+        // 若是从空队列添加了一个元素，发送"非空"通知
+        // 注：程序不会每添加一个元素就发送一个"非空"的通知。因为消费者只在空队列时，阻塞监听在|notEmpty|上
         if (c == 0)
             signalNotEmpty();
         return true;
@@ -407,52 +459,73 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      *
      * @throws NullPointerException if the specified element is null
      */
+    // 阻塞生产一个元素。如果队列已满，则立即返回false，否则方法会阻塞直到能生产一个元素为止
+    // 注：尝试生产一个元素，当队列已满，直接返回false
     public boolean offer(E e) {
         if (e == null) throw new NullPointerException();
         final AtomicInteger count = this.count;
+        // 队列已满，直接返回false
         if (count.get() == capacity)
             return false;
         int c = -1;
         Node<E> node = new Node<E>(e);
+
+        // 获取生产锁。在获取不到锁时，线程会一直阻塞，直到获取到锁
         final ReentrantLock putLock = this.putLock;
         putLock.lock();
         try {
-            if (count.get() < capacity) {
+            if (count.get() < capacity) {   // 队列未满
                 enqueue(node);
                 c = count.getAndIncrement();
+                // 生产者每添加一个元素，就检测队列是否已满，若"非满"，则发送一个"非满"的通知
                 if (c + 1 < capacity)
                     notFull.signal();
             }
         } finally {
             putLock.unlock();
         }
+        // 若是从空队列添加了一个元素，发送"非空"通知
+        // 注：程序不会每添加一个元素就发送一个"非空"的通知。因为消费者只在空队列时，阻塞监听在|notEmpty|上
         if (c == 0)
             signalNotEmpty();
         return c >= 0;
     }
 
+    // 阻塞消费一个元素。除非中断，否则方法会阻塞直到能获取一个元素为止
+    // 注：除非有中断，否则总是阻塞到能消费一个元素
     public E take() throws InterruptedException {
         E x;
         int c = -1;
         final AtomicInteger count = this.count;
         final ReentrantLock takeLock = this.takeLock;
+
+        // 获取消费锁。在获取不到锁时，线程会一直阻塞，直到获取到锁或者线程被中断
+        // 注：可能会抛出|InterruptedException|异常
         takeLock.lockInterruptibly();
         try {
+            // 队列中没有多余的元素待消费。监听在"非空"的条件变量上
+            // 注：生产者会在队列从空转变到非空时，发生"非空"通知
             while (count.get() == 0) {
                 notEmpty.await();
             }
+            // 从队列头部取走一个元素。即，先进先出FIFO
             x = dequeue();
             c = count.getAndDecrement();
+            // 消费者每删除一个元素，就检测队列是否已空，若"非空"，则发送一个"非空"的通知
             if (c > 1)
                 notEmpty.signal();
         } finally {
             takeLock.unlock();
         }
+        // 若是从满队列消费了一个元素，发送"非满"通知
+        // 注：程序不会每消费一个元素就发送一个"非满"的通知。因为生产者只在满队列时，阻塞监听在|notFull|上
         if (c == capacity)
             signalNotFull();
         return x;
     }
 
+    // 阻塞消费一个元素。除非中断、或者阻塞|timeout|时长后队列仍然是空的，否则方法会阻塞直到能消费一个元素为止
+    // 如果队列已空，包括阻塞|timeout|时长后仍然是空的，则立即返回false
     public E poll(long timeout, TimeUnit unit) throws InterruptedException {
         E x = null;
         int c = -1;
@@ -463,44 +536,56 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         try {
             while (count.get() == 0) {
                 if (nanos <= 0)
-                    return null;
-                nanos = notEmpty.awaitNanos(nanos);
+                    return null;    // 阻塞|timeout|时长后队列仍然是空的，返回null
+                nanos = notEmpty.awaitNanos(nanos); // 阻塞，直到"非空"通知的到来、或者超时返回
             }
             x = dequeue();
             c = count.getAndDecrement();
+            // 消费者每删除一个元素，就检测队列是否已空，若"非空"，则发送一个"非空"的通知
             if (c > 1)
                 notEmpty.signal();
         } finally {
             takeLock.unlock();
         }
+        // 若是从满队列消费了一个元素，发送"非满"通知
+        // 注：程序不会每消费一个元素就发送一个"非满"的通知。因为生产者只在满队列时，阻塞监听在|notFull|上
         if (c == capacity)
             signalNotFull();
         return x;
     }
 
+    // 阻塞消费一个元素。如果队列已空，则立即返回null，否则方法会阻塞直到能消费一个元素为止
+    // 注：尝试消费一个元素，当队列为空，直接返回null
     public E poll() {
         final AtomicInteger count = this.count;
+        // 队列已空，直接返回null
         if (count.get() == 0)
             return null;
         E x = null;
         int c = -1;
         final ReentrantLock takeLock = this.takeLock;
+
+        // 获取消费锁。在获取不到锁时，线程会一直阻塞，直到获取到锁
         takeLock.lock();
         try {
-            if (count.get() > 0) {
-                x = dequeue();
+            if (count.get() > 0) {  // 队列不为空
+                x = dequeue();  // 消费一个元素
                 c = count.getAndDecrement();
+                // 消费者每删除一个元素，就检测队列是否已空，若"非空"，则发送一个"非空"的通知
                 if (c > 1)
                     notEmpty.signal();
             }
         } finally {
             takeLock.unlock();
         }
+        // 若是从满队列消费了一个元素，发送"非满"通知
+        // 注：程序不会每消费一个元素就发送一个"非满"的通知。因为生产者只在满队列时，阻塞监听在|notFull|上
         if (c == capacity)
             signalNotFull();
         return x;
     }
 
+    // 查看队列中第一个元素值，若空队列，立即返回false
     public E peek() {
         if (count.get() == 0)
             return null;
@@ -520,14 +605,18 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
     /**
      * Unlinks interior Node p with predecessor trail.
      */
+    // 删除节点|p|，节点|trail|是前一个节点
     void unlink(Node<E> p, Node<E> trail) {
         // assert isFullyLocked();
         // p.next is not changed, to allow iterators that are
         // traversing p to maintain their weak-consistency guarantee.
         p.item = null;
         trail.next = p.next;
+        // 待删除的节点是尾部节点，即尾部节点被删除，重置尾部节点
         if (last == p)
             last = trail;
+        // 若是从满队列删除了一个元素，发送"非满"通知
+        // 注：程序不会每删除一个元素就发送一个"非满"的通知。因为生产者只在满队列时，阻塞监听在|notFull|上
         if (count.getAndDecrement() == capacity)
             notFull.signal();
     }
@@ -543,8 +632,11 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * @param o element to be removed from this queue, if present
      * @return {@code true} if this queue changed as a result of the call
      */
+    // 删除队列中一个节点
     public boolean remove(Object o) {
         if (o == null) return false;
+        // 结构变化，获取生产、消费互斥锁
+        // 注：生产、消费都会修改队列
         fullyLock();
         try {
             for (Node<E> trail = head, p = trail.next;
@@ -569,8 +661,11 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * @param o object to be checked for containment in this queue
      * @return {@code true} if this queue contains the specified element
      */
+    // 查找队列中一个节点
     public boolean contains(Object o) {
         if (o == null) return false;
+        // 同步查找，获取生产、消费互斥锁
+        // 注：生产、消费都会修改队列
         fullyLock();
         try {
             for (Node<E> p = head.next; p != null; p = p.next)
@@ -595,7 +690,10 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      *
      * @return an array containing all of the elements in this queue
      */
+    // 同步转换队列中所有元素为|Object[]|，返回该转换后数组
     public Object[] toArray() {
+        // 获取生产、消费互斥锁
+        // 注：生产、消费都会修改队列
         fullyLock();
         try {
             int size = count.get();
@@ -644,8 +742,11 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      *         this queue
      * @throws NullPointerException if the specified array is null
      */
+    // 同步转换队列中所有元素为|T[]|，返回该转换后数组
     @SuppressWarnings("unchecked")
     public <T> T[] toArray(T[] a) {
+        // 获取生产、消费互斥锁
+        // 注：生产、消费都会修改队列
         fullyLock();
         try {
             int size = count.get();
@@ -690,12 +791,15 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * Atomically removes all of the elements from this queue.
      * The queue will be empty after this call returns.
      */
+    // 同步清空队列中所有元素
     public void clear() {
+        // 获取生产、消费互斥锁
+        // 注：生产、消费都会修改队列
         fullyLock();
         try {
             for (Node<E> p, h = head; (p = h.next) != null; h = p) {
                 h.next = h;
-                p.item = null;
+                p.item = null;  // 数据指针引用置空 help gc
             }
             head = last;
             // assert head.item == null && head.next == null;
@@ -712,6 +816,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * @throws NullPointerException          {@inheritDoc}
      * @throws IllegalArgumentException      {@inheritDoc}
      */
+    // 消费队列中所有元素，将消费的元素全部移动到|c|集合中
     public int drainTo(Collection<? super E> c) {
         return drainTo(c, Integer.MAX_VALUE);
     }
@@ -722,14 +827,19 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * @throws NullPointerException          {@inheritDoc}
      * @throws IllegalArgumentException      {@inheritDoc}
      */
+    // 消费队列中所有元素，将消费的元素全部移动到|c|集合中
+    // 注：|maxElements|为最多消费的队列个数，当然个数不会超过原本队列中存在的元素个数
     public int drainTo(Collection<? super E> c, int maxElements) {
         if (c == null)
             throw new NullPointerException();
+        // 队列也是一个集合类型，此处需要相等判断
         if (c == this)
             throw new IllegalArgumentException();
         if (maxElements <= 0)
             return 0;
         boolean signalNotFull = false;
+
+        // 获取消费锁
         final ReentrantLock takeLock = this.takeLock;
         takeLock.lock();
         try {
@@ -749,14 +859,17 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
                 return n;
             } finally {
                 // Restore invariants even if c.add() threw
+                // 消费了至少一个元素
                 if (i > 0) {
                     // assert h.item == null;
                     head = h;
-                    signalNotFull = (count.getAndAdd(-i) == capacity);
+                    signalNotFull = (count.getAndAdd(-i) == capacity);  // 判断消费前队列是否为"满队列"
                 }
             }
         } finally {
             takeLock.unlock();
+            // 若是从满队列消费了元素，发送"非满"通知
+            // 注：程序不会每消费一个元素就发送一个"非满"的通知。因为生产者只在满队列时，阻塞监听在|notFull|上
             if (signalNotFull)
                 signalNotFull();
         }

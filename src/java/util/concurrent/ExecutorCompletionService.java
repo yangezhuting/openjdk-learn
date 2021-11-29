@@ -104,11 +104,14 @@ package java.util.concurrent;
  *         use(result);
  * }}</pre>
  */
-// 包装ExecutorService执行器服务，使其能自动检测到已完成的任务
+// 装饰ExecutorService执行器服务，使其能自动检测到已完成的任务
+// 精华：执行器中运行的实际任务为|QueueingFuture|，使用|QueueingFuture.done|重写|FutureTask.done|实现任
+// 务完成时，将已完成任务添加到|completionQueue|队列中；需要结束未完成任务时，使用执行器的取消接口（中断机制）
 public class ExecutorCompletionService<V> implements CompletionService<V> {
     private final Executor executor;
     private final AbstractExecutorService aes;
-    private final BlockingQueue<Future<V>> completionQueue; // 存放已执行完成任务的队列。由|QueueingFuture.done()|添加
+    // 存放已执行完成任务的队列。由|QueueingFuture.done()|添加
+    private final BlockingQueue<Future<V>> completionQueue;
 
     /**
      * FutureTask extension to enqueue upon completion

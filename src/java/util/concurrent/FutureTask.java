@@ -61,6 +61,10 @@ import java.util.concurrent.locks.LockSupport;
  * @param <V> The result type returned by this FutureTask's {@code get} methods
  */
 // 实现了Runner接口，可由线程池execute方法执行；重写的run方法，会将结果广播给所有等待者
+// 精华：操作"等待结果"链表时，不使用互斥锁。因为代码实现的目的很单一，即，清除所有待删除的
+// 节点。也就无需担心链表在多线程中执行删除时，即使一个节点指向了被其他线程删除的节点，在下
+// 次循环也会被删除；更不会出现一个有效的节点被勿删除了，因为新增的节点总是在头部，这也是只
+// 有在操作头节点时，使用CAS计算
 public class FutureTask<V> implements RunnableFuture<V> {
     /*
      * Revision notes: This differs from previous versions of this
@@ -408,8 +412,8 @@ public class FutureTask<V> implements RunnableFuture<V> {
     private void finishCompletion() {
         // assert state > COMPLETING;
 
-        // 注：以下的链表操作，并没有使用互斥锁。理由和|removeWaiter()|方法一致。逻辑非常单一，即，遍历所有节点，里
-        // 面的写入操作，也仅仅是更新的指针引用，而被更新的节点也已经被通知唤醒
+        // 注：以下的链表操作，并没有使用互斥锁。理由和|removeWaiter()|方法一致。逻辑非常单一，即，遍
+        // 历所有节点，里面的写入操作，也仅仅是更新的指针引用，而被更新的节点也已经被通知唤醒
 
         // 等待队列不为空，遍历队列，唤醒对应的等待线程
         for (WaitNode q; (q = waiters) != null;) {
@@ -463,7 +467,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
                 throw new InterruptedException();
             }
 
-            // 注：此处没有进行线程间同步操作，因为|state|是一个简单标志位，并且它不会出现"回跳"到之前的状态
+            // 注：此处没有进行线程间同步操作，因为|state|是一个简单标志位，并且它不会出现"回退"到之前的状态
 
             int s = state;
             if (s > COMPLETING) {
@@ -510,9 +514,10 @@ public class FutureTask<V> implements RunnableFuture<V> {
         if (node != null) {
             node.thread = null; // 将待移除的节点，线程引用置空。也有help gc作用
 
-            // 注：以下的链表操作，并没有使用互斥锁。因为代码实现的目的很单一，即，清除所有待删除的节点。也就无需担心链表在多线程
-            // 中执行删除时，一个节点指向了被其他线程删除的节点；更不会出现一个有效的节点被勿删除了，因为新增的节点总是在头部，这
-            // 也是为什么下面代码，只有在操作头节点时，使用CAS计算
+            // 注：以下的链表操作，并没有使用互斥锁。因为代码实现的目的很单一，即，清除所有待删除的节点。也就无
+            // 需担心链表在多线程中执行删除时，即使一个节点指向了被其他线程删除的节点，在下次循环也会被删除；更
+            // 不会出现一个有效的节点被勿删除了，因为新增的节点总是在头部，这也是为什么下面代码，只有在操作头节
+            // 点时，使用CAS计算
 
             retry:
             for (;;) {          // restart on removeWaiter race
