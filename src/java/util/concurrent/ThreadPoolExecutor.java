@@ -1508,9 +1508,10 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         }
         // 线程池处于运行状态，工作线程超过了corePoolSize，尝试将任务添加至队列中
         // 注：每次在offer之前都要做状态检测，也就是线程池状态变为>=SHUTDOWN时不允许新任务进来
+        // 注：阻塞队列|offer|接口，如果队列已满，则立即返回false，否则会阻塞直到添加一个元素为止
         if (isRunning(c) && workQueue.offer(command)) {
             int recheck = ctl.get();
-            // 添加队列成功，再次做状态检测，若线程池已被关闭，将新增的任务移除，并执行拒绝逻辑
+            // 添加队列成功，再次做状态检测：若线程池已被关闭，将新增的任务移除，并执行拒绝逻辑
             // 注：多线程下，此处不会有ABA问题，因为线程池状态是不会出现"回退"
             if (! isRunning(recheck) && remove(command))
                 // 执行拒绝逻辑：默认是抛出异常、也可以设置为直接在提交任务的线程"就地"执行任务
@@ -1523,6 +1524,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                 addWorker(null, false);
         }
         // 队列添加失败（满了），增加一个非核心的工作线程：数量的限制是"最大线程数"
+        // 注：由|newCachedThreadPool()|创建的线程池，添加首任务时，会执行此逻辑来增加一个消费者
         else if (!addWorker(command, false))
             // 队列添加失败、工作线程添加失败，执行拒绝逻辑
             // 执行拒绝逻辑：默认是抛出异常、也可以设置为直接在提交任务的线程"就地"执行任务

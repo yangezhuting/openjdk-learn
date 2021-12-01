@@ -77,8 +77,8 @@ import java.util.function.Consumer;
  * @author Doug Lea
  * @param <E> the type of elements held in this collection
  */
-// 链表阻塞队列，先进先出FIFO
-// 精华：头引用指向的节点中的元素始终指向null。非常巧妙的实现线程安全
+// 单向链表的阻塞队列。支持先进先出FIFO
+// 精华：头引用始终指向一个dummy node节点（元素是null），它可以非常巧妙的实现线程安全
 public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         implements BlockingQueue<E>, java.io.Serializable {
     private static final long serialVersionUID = -6903933977591709194L;
@@ -148,10 +148,10 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * Head of linked list.
      * Invariant: head.item == null
      */
-    // 消费指针。头引用指向的节点中的元素始终指向null，相当于是一个"空节点"
-    // 注：在本阻塞队列算法中，使用了不同的互斥锁来保护生产、消费动作。该"空节点"可以让线程
-    // 安全简单化：当队列中存在一个以上的节点，|head|和|last|指向就不可能相同，而生产、消
-    // 费算法中，会去修改各自的指针，也就不会有线程安全问题
+    // 消费指针。头引用指向的节点中的元素始终指向null，是一个"dummy node"
+    // 注：在本阻塞队列算法中，使用了不同的互斥锁来保护生产、消费动作。该"dummy node"可以
+    // 让线程安全简单化：当队列中存在一个以上的节点，|head|和|last|指向就不可能相同，而生
+    // 产、消费算法中，会去修改各自的指针，也就不会有线程安全问题
     transient Node<E> head; // 头节点指针
 
     /**
@@ -162,13 +162,14 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
     private transient Node<E> last; // 尾节点指针
 
     /** Lock held by take, poll, etc */
+    // 消费锁
     private final ReentrantLock takeLock = new ReentrantLock();
 
     /** Wait queue for waiting takes */
     private final Condition notEmpty = takeLock.newCondition();
 
     /** Lock held by put, offer, etc */
-    // 新增元素到队列中的互斥锁
+    // 生产锁
     private final ReentrantLock putLock = new ReentrantLock();
 
     /** Wait queue for waiting puts */
@@ -225,15 +226,15 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         // assert takeLock.isHeldByCurrentThread();
         // assert head.item == null;
 
-        // 把当前头节点删除（一定是一个空节点。从以上|assert|语句也可以看出）
-        // 注：头元素要么是初始化时的空节点，要么是已被消费的空节点
+        // 把当前头节点删除（一定是一个dummy node。从以上|assert|语句也可以看出）
+        // 注：头元素要么是初始化时的dummy node，要么是已被消费的dummy node
         Node<E> h = head;
         Node<E> first = h.next;
         h.next = h; // help GC
 
-        // 将头节点指向将要被消费的节点，然后设置其为新的空节点，并将其中的存储的元素值返回
-        // 注：在本阻塞队列算法中，使用了不同的互斥锁来保护生产、消费动作。该"空节点"可以让线程
-        // 安全简单化：当队列中存在一个以上的节点，|head|和|last|指向就不可能相同，而生产、消
+        // 将头节点指向将要被消费的节点，然后设置其为新的dummy node，并将其中的存储的元素值返回
+        // 注：在本阻塞队列算法中，使用了不同的互斥锁来保护生产、消费动作。该dummy node可以让线
+        // 程安全简单化：当队列中存在一个以上的节点，|head|和|last|指向就不可能相同，而生产、消
         // 费算法中，会去修改各自的指针，也就不会有线程安全问题
         head = first;
         E x = first.item;
@@ -285,10 +286,10 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
     public LinkedBlockingQueue(int capacity) {
         if (capacity <= 0) throw new IllegalArgumentException();
         this.capacity = capacity;
-        // 初始化头、尾节点到一个"空元素"的节点
-        // 注：在本阻塞队列算法中，使用了不同的互斥锁来保护生产、消费动作。该"空节点"可以让线程
-        // 安全简单化：当队列中存在一个以上的节点，|head|和|last|指向就不可能相同，而生产、消
-        // 费算法中，会去修改各自的指针，也就不会有线程安全问题
+        // 初始化设置头、尾节点指向一个"dummy node"
+        // 注：在本阻塞队列算法中，使用了不同的互斥锁来保护生产、消费动作。该"dummy node"可以
+        // 让线程安全简单化：当队列中存在一个以上的节点，|head|和|last|指向就不可能相同，而生
+        // 产、消费算法中，会去修改各自的指针，也就不会有线程安全问题
         last = head = new Node<E>(null);
     }
 
@@ -413,7 +414,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * @throws NullPointerException {@inheritDoc}
      */
     // 阻塞生产一个元素。除非中断、或者阻塞|timeout|时长后队列仍然是满的，否则方法会阻塞直到能生产一个元素为止
-    // 如果队列已满，包括阻塞|timeout|时长后仍然是满的，则立即返回false
+    // 如果队列已满，阻塞等待|timeout|时长，若仍然是满的，则返回false
     public boolean offer(E e, long timeout, TimeUnit unit)
         throws InterruptedException {
 
@@ -525,7 +526,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
     }
 
     // 阻塞消费一个元素。除非中断、或者阻塞|timeout|时长后队列仍然是空的，否则方法会阻塞直到能消费一个元素为止
-    // 如果队列已空，包括阻塞|timeout|时长后仍然是空的，则立即返回false
+    // 如果队列为空，阻塞等待|timeout|时长，若仍然是空的，则返回false
     public E poll(long timeout, TimeUnit unit) throws InterruptedException {
         E x = null;
         int c = -1;
@@ -554,7 +555,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         return x;
     }
 
-    // 阻塞消费一个元素。如果队列已空，则立即返回null，否则方法会阻塞直到能消费一个元素为止
+    // 阻塞消费一个元素。如果队列为空，则立即返回null，否则方法会阻塞直到能消费一个元素为止
     // 注：尝试消费一个元素，当队列为空，直接返回null
     public E poll() {
         final AtomicInteger count = this.count;

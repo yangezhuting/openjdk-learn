@@ -79,6 +79,10 @@ import java.util.Spliterator;
  * @author Doug Lea
  * @param <E> the type of elements held in this collection
  */
+// 有界阻塞队列。相比|LinkedBlockingQueue|阻塞队列中的"有界"（默认|Integer.MAX_VALUE|限制）相比，
+// |ArrayBlockingQueue|会预先分配所有内存，是一个"真正有界"阻塞队列
+// 注：说实话，相比|LinkedBlockingQueue|阻塞队列，此队列唯一优势可能就是节省内存了！毕竟队列是不需要
+// 数组提供随机访问优势
 public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         implements BlockingQueue<E>, java.io.Serializable {
 
@@ -94,9 +98,11 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     final Object[] items;
 
     /** items index for next take, poll, peek or remove */
+    // 消费索引
     int takeIndex;
 
     /** items index for next put, offer, or add */
+    // 生产索引
     int putIndex;
 
     /** Number of elements in the queue */
@@ -235,6 +241,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
      * @param capacity the capacity of this queue
      * @throws IllegalArgumentException if {@code capacity < 1}
      */
+    // 构造一个有界的（|capacity|长度限制）阻塞队列
     public ArrayBlockingQueue(int capacity) {
         this(capacity, false);
     }
@@ -249,9 +256,11 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
      *        if {@code false} the access order is unspecified.
      * @throws IllegalArgumentException if {@code capacity < 1}
      */
+    // 构造一个有界的（|capacity|长度限制）阻塞队列
     public ArrayBlockingQueue(int capacity, boolean fair) {
         if (capacity <= 0)
             throw new IllegalArgumentException();
+        // 立即分配最大长度的阻塞队列的内存
         this.items = new Object[capacity];
         lock = new ReentrantLock(fair);
         notEmpty = lock.newCondition();

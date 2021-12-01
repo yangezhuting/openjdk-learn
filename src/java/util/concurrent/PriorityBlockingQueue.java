@@ -105,6 +105,9 @@ import java.util.function.Consumer;
  * @author Doug Lea
  * @param <E> the type of elements held in this collection
  */
+// 无界优先阻塞队列。相比|LinkedBlockingQueue|阻塞队列中的"有界"（默认|Integer.MAX_VALUE|限制）相比，
+// |PriorityBlockingQueue|是一个"真正无界"阻塞队列，其会自动增长；优先特性采用了最小堆实现
+// 注：关于最小堆的实现代码，此类中不做说明。详细请查看|java.util.PriorityQueue|中注释
 @SuppressWarnings("unchecked")
 public class PriorityBlockingQueue<E> extends AbstractQueue<E>
     implements BlockingQueue<E>, java.io.Serializable {
@@ -173,6 +176,7 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
     /**
      * Spinlock for allocation, acquired via CAS.
      */
+    // 自旋锁，用于自动增长队列的容量。CAS原子操作确保线程安全性
     private transient volatile int allocationSpinLock;
 
     /**
@@ -187,6 +191,7 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
      * initial capacity (11) that orders its elements according to
      * their {@linkplain Comparable natural ordering}.
      */
+    // 初始化初始容量为11的无界优先阻塞队列
     public PriorityBlockingQueue() {
         this(DEFAULT_INITIAL_CAPACITY, null);
     }
@@ -200,6 +205,7 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
      * @throws IllegalArgumentException if {@code initialCapacity} is less
      *         than 1
      */
+    // 初始化初始容量为|initialCapacity|的无界优先阻塞队列
     public PriorityBlockingQueue(int initialCapacity) {
         this(initialCapacity, null);
     }
@@ -216,6 +222,7 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
      * @throws IllegalArgumentException if {@code initialCapacity} is less
      *         than 1
      */
+    // 初始化初始容量为|initialCapacity|的无界优先阻塞队列，比较器设置为|comparator|
     public PriorityBlockingQueue(int initialCapacity,
                                  Comparator<? super E> comparator) {
         if (initialCapacity < 1)
@@ -223,6 +230,7 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
         this.lock = new ReentrantLock();
         this.notEmpty = lock.newCondition();
         this.comparator = comparator;
+        // 立即分配最大长度的阻塞队列的内存
         this.queue = new Object[initialCapacity];
     }
 
@@ -242,21 +250,27 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
      * @throws NullPointerException if the specified collection or any
      *         of its elements are null
      */
+    // 构造一个无界的优先阻塞队列。初始元素为集合|c|中的元素
     public PriorityBlockingQueue(Collection<? extends E> c) {
         this.lock = new ReentrantLock();
         this.notEmpty = lock.newCondition();
         boolean heapify = true; // true if not known to be in heap order
         boolean screen = true;  // true if must screen for nulls
-        if (c instanceof SortedSet<?>) {
+        if (c instanceof SortedSet<?>) {    // 有序集
             SortedSet<? extends E> ss = (SortedSet<? extends E>) c;
+            // 获取有序集的比较器
             this.comparator = (Comparator<? super E>) ss.comparator();
-            heapify = false;
+            heapify = false;    // 需要重新执行最小推排序
+            // 此时|screen==true|，元素会进行null值判定
         }
-        else if (c instanceof PriorityBlockingQueue<?>) {
+        else if (c instanceof PriorityBlockingQueue<?>) {   // 优先阻塞队列
             PriorityBlockingQueue<? extends E> pq =
                 (PriorityBlockingQueue<? extends E>) c;
+            // 获取队列的比较器
             this.comparator = (Comparator<? super E>) pq.comparator();
-            screen = false;
+            screen = false; // |PriorityBlockingQueue|类型的容器，无需null值判定
+            // 此时会执行最小推排序，除非|c|容器就是优先阻塞队列，而非是某个子类，因为子类
+            // 相对而言是"非受控"的
             if (pq.getClass() == PriorityBlockingQueue.class) // exact match
                 heapify = false;
         }
@@ -265,6 +279,7 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
         // If c.toArray incorrectly doesn't return Object[], copy it.
         if (a.getClass() != Object[].class)
             a = Arrays.copyOf(a, n, Object[].class);
+        // 当阻塞队列中只有一个元素时，该元素不能为null；或当存在比较器时，阻塞队列中不能有null元素
         if (screen && (n == 1 || this.comparator != null)) {
             for (int i = 0; i < n; ++i)
                 if (a[i] == null)
@@ -272,6 +287,7 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
         }
         this.queue = a;
         this.size = n;
+        // 必要时，执行最小堆算法排序；除非|c|容器就是优先阻塞队列，无需执行
         if (heapify)
             heapify();
     }
@@ -285,32 +301,45 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
      * @param array the heap array
      * @param oldCap the length of the array
      */
+    // 内存容量自动增长
+    // 注：外部需已持有了队列的互斥锁；并且该方法需包裹在循环当中，以实现自旋算法
     private void tryGrow(Object[] array, int oldCap) {
+        // 释放外部已持有的互斥锁
         lock.unlock(); // must release and then re-acquire main lock
         Object[] newArray = null;
+        // 注：此处变量|allocationSpinLock|使用CAS来实现线程安全性，实际的自旋（循环）动
+        // 作由外部调用者实现
         if (allocationSpinLock == 0 &&
             UNSAFE.compareAndSwapInt(this, allocationSpinLockOffset,
                                      0, 1)) {
             try {
+                // 当队列较小时，扩大为原来的1.5倍；否则扩大为原来的2倍+2
                 int newCap = oldCap + ((oldCap < 64) ?
                                        (oldCap + 2) : // grow faster if small
                                        (oldCap >> 1));
+                // 可能有溢出风险
                 if (newCap - MAX_ARRAY_SIZE > 0) {    // possible overflow
                     int minCap = oldCap + 1;
+                    // 原始长度为负数（已经溢出），或者原始长度超出队列最大长度限制，抛出OOM异常
                     if (minCap < 0 || minCap > MAX_ARRAY_SIZE)
                         throw new OutOfMemoryError();
+                    // 扩张后有溢出，将其设置为队列最大长度
                     newCap = MAX_ARRAY_SIZE;
                 }
+                // 线程安全校验成功后，分配新的队列内存
                 if (newCap > oldCap && queue == array)
                     newArray = new Object[newCap];
             } finally {
                 allocationSpinLock = 0;
             }
         }
+        // 主动出让CPU，必须过度消耗CPU。自旋锁常用策略
         if (newArray == null) // back off if another thread is allocating
             Thread.yield();
+        // 重新获取队列的互斥锁
         lock.lock();
         if (newArray != null && queue == array) {
+            // 线程安全校验成功后，替换原始队列的底层容器
             queue = newArray;
             System.arraycopy(array, 0, newArray, 0, oldCap);
         }
@@ -481,15 +510,18 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
         lock.lock();
         int n, cap;
         Object[] array;
+        // 队列分配的容量已经全部使用完，自旋的增长队列的容量，直到成功为止
         while ((n = size) >= (cap = (array = queue).length))
             tryGrow(array, cap);
         try {
+            // 向最小堆中增加一个元素
             Comparator<? super E> cmp = comparator;
             if (cmp == null)
                 siftUpComparable(n, e, array);
             else
                 siftUpUsingComparator(n, e, array, cmp);
             size = n + 1;
+            // 发送"非空"的通知
             notEmpty.signal();
         } finally {
             lock.unlock();

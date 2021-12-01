@@ -80,7 +80,7 @@ import java.util.function.Consumer;
  * @param <E> the type of elements held in this collection
  */
 // 高效的最小堆实现的优先队列。实现了 Queue 接口。底层基于数组实现
-// 注：最小堆是任一非终端节点的数据值均不大于其子节点的值；添加、删除的时间复杂度为 O(logn)
+// 注：最小堆是任一非终端节点的数据值均不大于其子节点的值；添加、删除的时间复杂度为O(logn)
 public class PriorityQueue<E> extends AbstractQueue<E>
     implements java.io.Serializable {
 
