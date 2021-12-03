@@ -77,7 +77,7 @@ import java.util.function.Consumer;
  * @author Doug Lea
  * @param <E> the type of elements held in this collection
  */
-// 单向链表的阻塞队列。支持先进先出FIFO
+// 单向链表实现的阻塞队列。支持先进先出FIFO
 // 精华：头引用始终指向一个dummy node节点（元素是null），它可以非常巧妙的实现线程安全
 public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         implements BlockingQueue<E>, java.io.Serializable {

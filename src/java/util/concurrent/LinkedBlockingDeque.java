@@ -74,7 +74,7 @@ import java.util.function.Consumer;
  * @author  Doug Lea
  * @param <E> the type of elements held in this collection
  */
-// 双端链表的阻塞队列。支持先进先出FIFO/后进先出LIFO。默认接口|put()|take()|以FIFO方式使用队列
+// 双端链表实现的阻塞队列。支持先进先出FIFO/后进先出LIFO。默认接口|put()|take()|以FIFO方式使用队列
 // 注：相比|LinkedBlockingQueue|支持更多的用法；但效率可能不如|LinkedBlockingQueue|队列，后
 // 者使用了更细粒度的互斥锁来操作链表
 public class LinkedBlockingDeque<E>

@@ -89,6 +89,8 @@ import java.util.function.Consumer;
  * @author Martin Buchholz
  * @param <E> the type of elements held in this collection
  */
+// 双向链表实现的线程安全双端队列。支持先进先出FIFO/后进先出LIFO
+// 是|LinkedBlockingDeque|阻塞队列的去除了通知机制的简化版。此处不在重复注释
 public class ConcurrentLinkedDeque<E>
     extends AbstractCollection<E>
     implements Deque<E>, java.io.Serializable {

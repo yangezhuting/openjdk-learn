@@ -67,6 +67,8 @@ import java.util.*;
  * @author Doug Lea
  * @param <E> the type of elements held in this collection
  */
+// 可延时的无界阻塞队列。核心算法与|ScheduledThreadPoolExecutor.DelayedWorkQueue|一致
+// 此处不在重复注释
 public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
     implements BlockingQueue<E> {
 

@@ -84,8 +84,8 @@ import java.util.Spliterators;
 // 同步阻塞队列，每一次put操作，必须等待其他线性的take操作，反之亦然；队列不存储任何元素，也就没有容
 // 量概念。对应的|peek,contains,clear...|等方法是无效的。队列有公平(TransferQueue FIFO)与非
 // 公平(TransferStack LIFO 默认)两种策略模式
-// 注：虽然在多线程场景中，我们可以同时添加多个生产者或者消费者节点（队列中只能有一个类型的节点）到队列
-// 中，但本质上，消费者和生产者还是遵循一一"匹配消耗"（一个生产者数据被一个消费者捕获消费）的
+// 注：在多线程场景中，我们可以同时添加多个生产者或者消费者节点（队列中只能有一个类型的节点）到队列
+// 中；不过最终，消费者和生产者依然还是需要一一匹配消耗（一个生产者数据被一个消费者捕获消费）
 // 注：如果你想到了GOLANG中的|chan|机制就对了！他们工作模式、使用场景都很相似。不过GOLANG中还可指定
 // 数据投递转移（线程间同步）的并发个数，而|SynchronousQueue|只有一个，类似"停等"模式
 public class SynchronousQueue<E> extends AbstractQueue<E>
@@ -218,10 +218,10 @@ public class SynchronousQueue<E> extends AbstractQueue<E>
 
     /** Dual stack */
     // 注：一个LIFO队列，头部生产新增（头插），头部匹配消耗
-    // 精华：将一个节点的|match|字段指向相邻的|FULFILLING|类型的前驱节点，表示该节点被匹配
     // 精华：不同于|TransferQueue|队列中的"匹配消耗"算法，|TransferStack|采用了两个相邻
     // 的不同类型的节点相互抵消法，来进行生产者与消费者的一一匹配。这使得匹配算法很非常灵活，甚
-    // 至可以让另一个线程辅助执行匹配算法。当然主要还是：在栈上设计一个匹配算法较为方便
+    // 至可以让另一个线程辅助执行匹配算法。当然主要还是：在栈上设计这样一个匹配算法较为方便
+    // 精华：将一个节点的|match|字段指向前驱|FULFILLING|类型的节点，表示该节点被匹配
     static final class TransferStack<E> extends Transferer<E> {
         /*
          * This extends Scherer-Scott dual stack algorithm, differing,

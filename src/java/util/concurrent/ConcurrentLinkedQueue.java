@@ -102,6 +102,8 @@ import java.util.function.Consumer;
  * @author Doug Lea
  * @param <E> the type of elements held in this collection
  */
+// 单向链表实现的线程安全队列。支持先进先出FIFO
+// 是|LinkedBlockingQueue|阻塞队列的去除了通知机制的简化版。此处不在重复注释
 public class ConcurrentLinkedQueue<E> extends AbstractQueue<E>
         implements Queue<E>, java.io.Serializable {
     private static final long serialVersionUID = 196745693267521676L;
