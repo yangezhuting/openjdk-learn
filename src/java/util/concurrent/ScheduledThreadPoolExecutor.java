@@ -118,6 +118,9 @@ import java.util.*;
  * @since 1.5
  * @author Doug Lea
  */
+// 一个可以管理计划任务（延时、周期的任务）的线程池
+// 精华：计划任务队列中使用一个"领导者"线程，来解决多个线程限时等待同一过期任务时的"惊群"效应。即，只
+// 有一个线程可以竞争获取到最先过期的任务的限时等待条件变量上
 public class ScheduledThreadPoolExecutor
         extends ThreadPoolExecutor
         implements ScheduledExecutorService {
@@ -152,11 +155,13 @@ public class ScheduledThreadPoolExecutor
     /**
      * False if should cancel/suppress periodic tasks on shutdown.
      */
+    // 默认为|false|：将周期任务添加至计划任务队列中后，检测到线程池关闭，需要立即将其移除
     private volatile boolean continueExistingPeriodicTasksAfterShutdown;
 
     /**
      * False if should cancel non-periodic tasks on shutdown.
      */
+    // 默认为|true|：将延时任务添加至计划任务队列中后，检测到线程池关闭，无需将其移除，后续依旧将其执行
     private volatile boolean executeExistingDelayedTasksAfterShutdown = true;
 
     /**
@@ -177,6 +182,8 @@ public class ScheduledThreadPoolExecutor
         return System.nanoTime();
     }
 
+    // 计划任务|FutureTask|主要用于将一个可调用对象装饰成一个具有定时、周期特性的任务
+    // 注：其实现了|Comparable<Delayed>|接口，可根据任务过期时间|time|进行排序
     private class ScheduledFutureTask<V>
             extends FutureTask<V> implements RunnableScheduledFuture<V> {
 
@@ -184,6 +191,7 @@ public class ScheduledThreadPoolExecutor
         private final long sequenceNumber;
 
         /** The time the task is enabled to execute in nanoTime units */
+        // 任务需要执行的时间戳 - 过期时间
         private long time;
 
         /**
@@ -195,11 +203,13 @@ public class ScheduledThreadPoolExecutor
         private final long period;
 
         /** The actual task to be re-enqueued by reExecutePeriodic */
+        // 周期行任务在执行完，需要重新入队任务
         RunnableScheduledFuture<V> outerTask = this;
 
         /**
          * Index into delay queue, to support faster cancellation.
          */
+        // 任务在优先堆中索引
         int heapIndex;
 
         /**
@@ -232,15 +242,20 @@ public class ScheduledThreadPoolExecutor
             this.sequenceNumber = sequencer.getAndIncrement();
         }
 
+        // 任务下一次需要执行的剩余时间
         public long getDelay(TimeUnit unit) {
             return unit.convert(time - now(), NANOSECONDS);
         }
 
+        // 根据任务过期时间排序，距离当前时间越近排序越靠前
         public int compareTo(Delayed other) {
             if (other == this) // compare zero if same object
                 return 0;
+
+            // 优化分支：大多数场景下会命中该分支，可直接排序过期时间；若两者相同，可再根据序列号排序
             if (other instanceof ScheduledFutureTask) {
                 ScheduledFutureTask<?> x = (ScheduledFutureTask<?>)other;
+                // 比较两个任务的过期时间 - 过期时间越近排序越靠前
                 long diff = time - x.time;
                 if (diff < 0)
                     return -1;
@@ -251,6 +266,8 @@ public class ScheduledThreadPoolExecutor
                 else
                     return 1;
             }
+
+            // 比较两个任务剩余时间 - 剩余时间越小排序越靠前
             long diff = getDelay(NANOSECONDS) - other.getDelay(NANOSECONDS);
             return (diff < 0) ? -1 : (diff > 0) ? 1 : 0;
         }
@@ -267,6 +284,7 @@ public class ScheduledThreadPoolExecutor
         /**
          * Sets the next time to run for a periodic task.
          */
+        // 重新计算任务下一次过期时间
         private void setNextRunTime() {
             long p = period;
             if (p > 0)
@@ -276,7 +294,10 @@ public class ScheduledThreadPoolExecutor
         }
 
         public boolean cancel(boolean mayInterruptIfRunning) {
+            // 取消一个正在执行的任务
             boolean cancelled = super.cancel(mayInterruptIfRunning);
+            // 取消任务成功后，将任务从队列中移除
+            // 注：默认不执行|removeOnCancel==false|删除动作，由外部调用者进行删除
             if (cancelled && removeOnCancel && heapIndex >= 0)
                 remove(this);
             return cancelled;
@@ -285,14 +306,25 @@ public class ScheduledThreadPoolExecutor
         /**
          * Overrides FutureTask version so as to reset/requeue if periodic.
          */
+        // 计划任务的运行入口方法
         public void run() {
+            // 是否是周期任务
             boolean periodic = isPeriodic();
+
+            // 若是周期任务，当线程池被关闭，立即取消该任务
+            // 若是延时任务，当线程池被关闭，该任务依然可以执行
             if (!canRunInCurrentRunState(periodic))
+                // 取消一个正在执行的任务，但不发送"中断请求"给正在执行的任务
                 cancel(false);
             else if (!periodic)
+                // 非周期性任务，不可重入的执行任务
+                // 注：任务状态被流转；可调用对象被置空
                 ScheduledFutureTask.super.run();
-            else if (ScheduledFutureTask.super.runAndReset()) {
+            else if (ScheduledFutureTask.super.runAndReset()) { // 周期性任务，可重入的执行任务
+                // 重新计算任务下一次过期时间
                 setNextRunTime();
+                // 将周期性任务重新重新入队
+                // 注：在本实现中|outerTask==this|，即自身会被重新入队
                 reExecutePeriodic(outerTask);
             }
         }
@@ -304,6 +336,8 @@ public class ScheduledThreadPoolExecutor
      *
      * @param periodic true if this task periodic, false if delayed
      */
+    // 若新增的是周期任务，返回false，表明该任务在线程池关闭时，不应该执行
+    // 若新增的是延时任务，返回true，表明该任务在线程池关闭时，依然可以执行
     boolean canRunInCurrentRunState(boolean periodic) {
         return isRunningOrShutdown(periodic ?
                                    continueExistingPeriodicTasksAfterShutdown :
@@ -321,16 +355,26 @@ public class ScheduledThreadPoolExecutor
      *
      * @param task the task
      */
+    // 将计划任务（定时、周期）提交至线程池
     private void delayedExecute(RunnableScheduledFuture<?> task) {
+        // 如果线程池已经关闭，使用拒绝策略拒绝任务
         if (isShutdown())
             reject(task);
         else {
+            // 将计划任务添加到定期任务阻塞队列中
+            // 注：|DelayedWorkQueue|是一个根据过期时间大小排序的优先阻塞队列
             super.getQueue().add(task);
+
+            // 若新增的是周期任务，此时线程池被关闭，立即移除并取消该任务
+            // 若新增的是延时任务，此时线程池被关闭，不移除该任务，即，该任务依然可以执行
             if (isShutdown() &&
                 !canRunInCurrentRunState(task.isPeriodic()) &&
                 remove(task))
+                // 取消一个正在执行的任务，但不发送"中断请求"给正在执行的任务
                 task.cancel(false);
             else
+                // 线程池中新增一个工作线程
+                // 注：即使核心线程为0，方法也将确保线程池中至少有一个工作线程
                 ensurePrestart();
         }
     }
@@ -342,11 +386,17 @@ public class ScheduledThreadPoolExecutor
      * @param task the task
      */
     void reExecutePeriodic(RunnableScheduledFuture<?> task) {
+        // 当线程池被关闭，周期性任务将不在重新入队
         if (canRunInCurrentRunState(true)) {
+            // 周期性任务重新入队
             super.getQueue().add(task);
+            // 默认：当线程池被关闭，立即取消该周期性任务
             if (!canRunInCurrentRunState(true) && remove(task))
+                // 取消一个正在执行的任务，但不发送"中断请求"给正在执行的任务
                 task.cancel(false);
             else
+                // 线程池中新增一个工作线程
+                // 注：即使核心线程为0，方法也将确保线程池中至少有一个工作线程
                 ensurePrestart();
         }
     }
@@ -426,7 +476,10 @@ public class ScheduledThreadPoolExecutor
      *        if they are idle, unless {@code allowCoreThreadTimeOut} is set
      * @throws IllegalArgumentException if {@code corePoolSize < 0}
      */
+    // 创建一个可以管理计划任务（延时、周期的任务）的线程池
     public ScheduledThreadPoolExecutor(int corePoolSize) {
+        // 构建一个核心线程为|corePoolSize|、不限制最大线程数（|Integer.MAX_VALUE|）、且
+        // 超过核心线程数的线程空闲时会立即回收的、采用可延时的队列的线程池
         super(corePoolSize, Integer.MAX_VALUE, 0, NANOSECONDS,
               new DelayedWorkQueue());
     }
@@ -489,6 +542,7 @@ public class ScheduledThreadPoolExecutor
     /**
      * Returns the trigger time of a delayed action.
      */
+    // 获取下一次执行的时间戳
     private long triggerTime(long delay, TimeUnit unit) {
         return triggerTime(unit.toNanos((delay < 0) ? 0 : delay));
     }
@@ -497,6 +551,8 @@ public class ScheduledThreadPoolExecutor
      * Returns the trigger time of a delayed action.
      */
     long triggerTime(long delay) {
+        // 注：|delay<(Long.MAX_VALUE>>1|是为了判断是否要防止Long类型溢出，如果|delay|的值
+        // 小于Long类型最大值的一半，则直接返回|delay|，否则需要进行防止溢出处理
         return now() +
             ((delay < (Long.MAX_VALUE >> 1)) ? delay : overflowFree(delay));
     }
@@ -508,10 +564,15 @@ public class ScheduledThreadPoolExecutor
      * not yet been, while some other task is added with a delay of
      * Long.MAX_VALUE.
      */
+    // 限制队列中所有节点的延迟时间在|Long.MAX_VALUE|之内，防止在|compareTo|方法中溢出
     private long overflowFree(long delay) {
+        // 获取队列中的第一个节点
         Delayed head = (Delayed) super.getQueue().peek();
         if (head != null) {
+            // 获取延迟时间
             long headDelay = head.getDelay(NANOSECONDS);
+            // 如果延迟时间小于0，并且 |delay - headDelay|超过了|Long.MAX_VALUE|
+            // 将|delay|设置为|Long.MAX_VALUE + headDelay|，保证|delay|小于|Long.MAX_VALUE|
             if (headDelay < 0 && (delay - headDelay < 0))
                 delay = Long.MAX_VALUE + headDelay;
         }
@@ -522,14 +583,18 @@ public class ScheduledThreadPoolExecutor
      * @throws RejectedExecutionException {@inheritDoc}
      * @throws NullPointerException       {@inheritDoc}
      */
+    // 提交一个计划任务（延时任务）：延时|delay|后执行的任务
     public ScheduledFuture<?> schedule(Runnable command,
                                        long delay,
                                        TimeUnit unit) {
         if (command == null || unit == null)
             throw new NullPointerException();
+
+        // 将可调用对象装饰成计划任务的FutureTask
         RunnableScheduledFuture<?> t = decorateTask(command,
             new ScheduledFutureTask<Void>(command, null,
                                           triggerTime(delay, unit)));
+        // 将该计划任务提交至线程池
         delayedExecute(t);
         return t;
     }
@@ -538,14 +603,18 @@ public class ScheduledThreadPoolExecutor
      * @throws RejectedExecutionException {@inheritDoc}
      * @throws NullPointerException       {@inheritDoc}
      */
+    // 提交一个计划任务（延时任务）：延时|delay|后执行的任务
     public <V> ScheduledFuture<V> schedule(Callable<V> callable,
                                            long delay,
                                            TimeUnit unit) {
         if (callable == null || unit == null)
             throw new NullPointerException();
+
+        // 将可调用对象装饰成计划任务的FutureTask
         RunnableScheduledFuture<V> t = decorateTask(callable,
             new ScheduledFutureTask<V>(callable,
                                        triggerTime(delay, unit)));
+        // 将该计划任务提交至线程池
         delayedExecute(t);
         return t;
     }
@@ -555,6 +624,7 @@ public class ScheduledThreadPoolExecutor
      * @throws NullPointerException       {@inheritDoc}
      * @throws IllegalArgumentException   {@inheritDoc}
      */
+    // 提交一个计划任务（周期任务）：延时|initialDelay|后执行的任务，周期为|period|
     public ScheduledFuture<?> scheduleAtFixedRate(Runnable command,
                                                   long initialDelay,
                                                   long period,
@@ -563,13 +633,19 @@ public class ScheduledThreadPoolExecutor
             throw new NullPointerException();
         if (period <= 0)
             throw new IllegalArgumentException();
+
+        // 将可调用对象装饰成计划任务的FutureTask
         ScheduledFutureTask<Void> sft =
             new ScheduledFutureTask<Void>(command,
                                           null,
                                           triggerTime(initialDelay, unit),
                                           unit.toNanos(period));
         RunnableScheduledFuture<Void> t = decorateTask(command, sft);
+
+        // 周期行任务在执行完，需要重新入队任务。在本实现中|sft==t|，即自身会被重新入队
         sft.outerTask = t;
+
+        // 将该计划任务提交至线程池
         delayedExecute(t);
         return t;
     }
@@ -806,6 +882,10 @@ public class ScheduledThreadPoolExecutor
      * class must be declared as a BlockingQueue<Runnable> even though
      * it can only hold RunnableScheduledFutures.
      */
+    // 可定期的无界阻塞队列。仅接受|RunnableScheduledFuture|类型的计划任务
+    // 注：一个根据过期时间大小排序的优先阻塞队列。即，过期时间最小的任务，在队列头部
+    // 精华：队列中使用一个"领导者"线程，来解决多个线程限时等待同一过期任务时的"惊群"效应。即，只
+    // 有一个线程可以竞争获取到最先过期的任务的限时等待条件变量上
     static class DelayedWorkQueue extends AbstractQueue<Runnable>
         implements BlockingQueue<Runnable> {
 
@@ -854,6 +934,10 @@ public class ScheduledThreadPoolExecutor
          * signalled.  So waiting threads must be prepared to acquire
          * and lose leadership while waiting.
          */
+        // 理想情况下，只有一个线程（领导者）限时等待在最先过期的任务上；而其他线程会"无限"阻塞
+        // 这样设计，是为了让尽可能少的线程执行限时等待逻辑。假设没有"领导者"逻辑，就可能有多个
+        // 线程限时等待队列头部的同一个任务上，在同一时间被唤醒，却又只能有一个线程真正有获取到
+        // 任务所有权。典型的"惊群"效应
         private Thread leader = null;
 
         /**
@@ -915,9 +999,11 @@ public class ScheduledThreadPoolExecutor
          */
         private void grow() {
             int oldCapacity = queue.length;
+            // 扩张到原始容量的1.5倍
             int newCapacity = oldCapacity + (oldCapacity >> 1); // grow 50%
             if (newCapacity < 0) // overflow
                 newCapacity = Integer.MAX_VALUE;
+            // 拷贝原始队列数据
             queue = Arrays.copyOf(queue, newCapacity);
         }
 
@@ -1002,24 +1088,38 @@ public class ScheduledThreadPoolExecutor
             }
         }
 
+        // 添加一个计划任务，根据过期时间进行最小堆排序
+        // 注：无阻塞逻辑，因为队列是无界的
         public boolean offer(Runnable x) {
             if (x == null)
                 throw new NullPointerException();
+
+            // 仅接受|RunnableScheduledFuture|类型的任务 - 计划任务
             RunnableScheduledFuture<?> e = (RunnableScheduledFuture<?>)x;
             final ReentrantLock lock = this.lock;
             lock.lock();
             try {
                 int i = size;
+                // 队列已满，自动扩容
                 if (i >= queue.length)
                     grow();
                 size = i + 1;
+                // 队列中没有数据
                 if (i == 0) {
                     queue[0] = e;
                     setIndex(e, 0);
                 } else {
+                    // 队列重新构建最小堆
                     siftUp(i, e);
                 }
+                // 若添加的任务已经是队列的第一个节点了，这时需要发出|available|信号
+                // 注：说明新增的计划任务是第一个或者是最小堆的头部（到期的最靠前，最可能需要执行）
                 if (queue[0] == e) {
+                    // 唤醒一个消费者线程，让该线程来尝试校验该新增的任务是否已过期、需要执行
+                    // 注：将|leader|置空，可以让该线程有机会成为新的"领导者"线程。这主要是为了
+                    // 应对这样一个场景：新增的任务还未过期，但剩余时间最小，此时若队列中已经存在
+                    // 领导者线程，若不将其置空，该线程会进入"无限"等待逻辑，将可能导致没有线程等
+                    // 待在该剩余时间最小的任务上；所有必须将|leader|置空
                     leader = null;
                     available.signal();
                 }
@@ -1037,6 +1137,8 @@ public class ScheduledThreadPoolExecutor
             return offer(e);
         }
 
+        // 添加一个计划任务的超时版
+        // 注：限时参数会被忽略，添加不会被阻塞，因为队列是无界的
         public boolean offer(Runnable e, long timeout, TimeUnit unit) {
             return offer(e);
         }
@@ -1071,27 +1173,49 @@ public class ScheduledThreadPoolExecutor
             }
         }
 
+        // 阻塞消费一个计划任务。除非中断，否则方法会阻塞直到能获取一个计划任务为止
+        // 注：除非有中断，否则总是阻塞到能消费一个计划任务
         public RunnableScheduledFuture<?> take() throws InterruptedException {
             final ReentrantLock lock = this.lock;
+
+            // 获队列互斥锁。在获取不到锁时，线程会一直阻塞，直到获取到锁或者线程被中断
+            // 注：可能会抛出|InterruptedException|异常
             lock.lockInterruptibly();
             try {
                 for (;;) {
                     RunnableScheduledFuture<?> first = queue[0];
                     if (first == null)
+                        // 队列中不存在元素，阻塞等待
                         available.await();
                     else {
+                        // 获取任务延时（过期剩余）时间
                         long delay = first.getDelay(NANOSECONDS);
+
+                        // 任务已到期，将任务从队列中删除，并返回
+                        // 注：此时，该任务的堆索引会被设置为|heapIndex==-1|
                         if (delay <= 0)
                             return finishPoll(first);
+
                         first = null; // don't retain ref while waiting
+
+                        // 理想情况下，只有一个线程限时等待在最先过期的任务上；而其他线程会"无限"阻塞。
+                        // 这样设计，是为了让尽可能少的线程执行限时等待逻辑。假设没有"领导者"逻辑，就
+                        // 可能有多个线程限时等待队列头部的同一个任务上，在同一时间被唤醒，却又只能有一
+                        // 个线程真正有获取到任务所有权。典型的"惊群"效应
                         if (leader != null)
                             available.await();
                         else {
+                            // 过期剩余时间最小的任务也未过期，进入阻塞等待，限时为最先过期任务的剩
+                            // 余时间
                             Thread thisThread = Thread.currentThread();
                             leader = thisThread;
                             try {
+                                // 阻塞直到最先过期任务的剩余时间结束为止
                                 available.awaitNanos(delay);
                             } finally {
+                                // 被唤醒的工作线程，是执行限时等待的"领导者"线程，他将会进入实际任
+                                // 务的执行。在此之前，将|leader|置空，就可以让其他线程有机会成为
+                                // 新的"领导者"线程
                                 if (leader == thisThread)
                                     leader = null;
                             }
@@ -1099,6 +1223,8 @@ public class ScheduledThreadPoolExecutor
                     }
                 }
             } finally {
+                // 队列中还有任务未执行、当领导者线程为空，需要主动唤醒一个线程来执行任务
+                // 注：领导者线程为空，说明没有线程在限时阻塞等待一个任务来执行，也就是没有"活动"的线程
                 if (leader == null && queue[0] != null)
                     available.signal();
                 lock.unlock();

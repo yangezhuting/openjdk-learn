@@ -85,6 +85,8 @@ public class Executors {
      * @return the newly created thread pool
      * @throws IllegalArgumentException if {@code nThreads <= 0}
      */
+    // 创建一个有固定工作线程的线程池。当提交的任务小于|nThreads|时，会直接创建线程来执行；超过部
+    // 分的任务会被添加至无界（限制为|Integer.MAX_VALUE|）的阻塞队列中
     public static ExecutorService newFixedThreadPool(int nThreads) {
         return new ThreadPoolExecutor(nThreads, nThreads,
                                       0L, TimeUnit.MILLISECONDS,
@@ -147,6 +149,8 @@ public class Executors {
      * @throws NullPointerException if threadFactory is null
      * @throws IllegalArgumentException if {@code nThreads <= 0}
      */
+    // 创建一个有固定工作线程的线程池。当提交的任务小于|nThreads|时，会直接创建线程来执行；超过部
+    // 分的任务会被添加至无界（限制为|Integer.MAX_VALUE|）的阻塞队列中
     public static ExecutorService newFixedThreadPool(int nThreads, ThreadFactory threadFactory) {
         return new ThreadPoolExecutor(nThreads, nThreads,
                                       0L, TimeUnit.MILLISECONDS,
@@ -167,6 +171,9 @@ public class Executors {
      *
      * @return the newly created single-threaded Executor
      */
+    // 创建一个只有单个工作线程的线程池
+    // 注：之所以将|ThreadPoolExecutor|类装饰为|FinalizableDelegatedExecutorService|类型，
+    // 最主要是因为后者不再提供更改线程池配置的接口。未经装饰的ThreadPoolExecutor线程池可以更改
     public static ExecutorService newSingleThreadExecutor() {
         return new FinalizableDelegatedExecutorService
             (new ThreadPoolExecutor(1, 1,
@@ -188,6 +195,9 @@ public class Executors {
      * @return the newly created single-threaded Executor
      * @throws NullPointerException if threadFactory is null
      */
+    // 创建一个只有单个工作线程的线程池
+    // 注：之所以将|ThreadPoolExecutor|类装饰为|FinalizableDelegatedExecutorService|类型，
+    // 最主要是因为后者不再提供更改线程池配置的接口。未经装饰的ThreadPoolExecutor线程池可以更改
     public static ExecutorService newSingleThreadExecutor(ThreadFactory threadFactory) {
         return new FinalizableDelegatedExecutorService
             (new ThreadPoolExecutor(1, 1,
@@ -212,6 +222,9 @@ public class Executors {
      *
      * @return the newly created thread pool
      */
+    // 创建一个不限制工作线程个数（限制为|Integer.MAX_VALUE|）的线程池。每添加一个任务，都会被
+    // 同步队列|SynchronousQueue|，尝试转交给当前已启动的空闲线程去执行，当不存在空闲线程时，会
+    // 直接新增线程。其中所有工作线程在最多空闲60s后被回收
     public static ExecutorService newCachedThreadPool() {
         return new ThreadPoolExecutor(0, Integer.MAX_VALUE,
                                       60L, TimeUnit.SECONDS,
@@ -227,6 +240,9 @@ public class Executors {
      * @return the newly created thread pool
      * @throws NullPointerException if threadFactory is null
      */
+    // 创建一个不限制工作线程个数（限制为|Integer.MAX_VALUE|）的线程池。每添加一个任务，都会被
+    // 同步队列|SynchronousQueue|，尝试转交给当前已启动的空闲线程去执行，当不存在空闲线程时，会
+    // 直接新增线程。其中所有工作线程在最多空闲60s后被回收
     public static ExecutorService newCachedThreadPool(ThreadFactory threadFactory) {
         return new ThreadPoolExecutor(0, Integer.MAX_VALUE,
                                       60L, TimeUnit.SECONDS,
@@ -247,6 +263,9 @@ public class Executors {
      * guaranteed not to be reconfigurable to use additional threads.
      * @return the newly created scheduled executor
      */
+    // 创建一个只有单个工作线程的计划任务线程池
+    // 注：之所以将|ScheduledThreadPoolExecutor|类装饰为|DelegatedScheduledExecutorService|类型，
+    // 最主要是因为后者不再提供更改线程池配置的接口。未经装饰的ScheduledThreadPoolExecutor线程池可以更改
     public static ScheduledExecutorService newSingleThreadScheduledExecutor() {
         return new DelegatedScheduledExecutorService
             (new ScheduledThreadPoolExecutor(1));
@@ -268,6 +287,9 @@ public class Executors {
      * @return a newly created scheduled executor
      * @throws NullPointerException if threadFactory is null
      */
+    // 创建一个只有单个工作线程的计划任务线程池
+    // 注：之所以将|ScheduledThreadPoolExecutor|类装饰为|DelegatedScheduledExecutorService|类型，
+    // 最主要是因为后者不再提供更改线程池配置的接口。未经装饰的ScheduledThreadPoolExecutor线程池可以更改
     public static ScheduledExecutorService newSingleThreadScheduledExecutor(ThreadFactory threadFactory) {
         return new DelegatedScheduledExecutorService
             (new ScheduledThreadPoolExecutor(1, threadFactory));
@@ -281,6 +303,7 @@ public class Executors {
      * @return a newly created scheduled thread pool
      * @throws IllegalArgumentException if {@code corePoolSize < 0}
      */
+    // 创建一个可以管理计划任务（延时、周期的任务）的线程池
     public static ScheduledExecutorService newScheduledThreadPool(int corePoolSize) {
         return new ScheduledThreadPoolExecutor(corePoolSize);
     }
@@ -296,6 +319,7 @@ public class Executors {
      * @throws IllegalArgumentException if {@code corePoolSize < 0}
      * @throws NullPointerException if threadFactory is null
      */
+    // 创建一个可以管理计划任务（延时、周期的任务）的线程池
     public static ScheduledExecutorService newScheduledThreadPool(
             int corePoolSize, ThreadFactory threadFactory) {
         return new ScheduledThreadPoolExecutor(corePoolSize, threadFactory);

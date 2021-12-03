@@ -939,7 +939,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * state).
      * @return true if successful
      */
-    // 新增一个工作单元（内含JDK内置线程），用于消费任务
+    // 新增一个工作线程，用于消费任务
     private boolean addWorker(Runnable firstTask, boolean core) {
         // 该|retry|代码块最大的作用是：工作线程的计数器加一，失败重试；若线程池已被关闭，直接返回false
         retry:
@@ -1431,8 +1431,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     // maximumPoolSize为线程池最大容量，也就是说线程池最多能起多少Worker工作线程
     // corePoolSize是核心线程池的大小，作用为：
     //  1.当corePoolSize未满，提交的任务会直接新建工作线程来执行
-    //  2.当corePoolSize满了，提交的任务添加至workQueue队列；当队列也满了，会新建工作线程，数量不超过maximumPoolSize
+    //  2.当corePoolSize满了，提交的任务添加至阻塞队列；当队列也满了，新建不超过maximumPoolSize线程
     //  3.超过corePoolSize之外的线程，会在空闲超时后，终止
+    // keepAliveTime空闲时间为0时，线程池会将超过核心线程数的线程在空闲时立即回收
     public ThreadPoolExecutor(int corePoolSize,
                               int maximumPoolSize,
                               long keepAliveTime,

@@ -178,8 +178,8 @@ public class FutureTask<V> implements RunnableFuture<V> {
         return state != NEW;
     }
 
-    // 取消正在执行的任务。|mayInterruptIfRunning|表示，是否发送"中断请求"给当前正在执行中的任务
-    // 注：要想真正的实现：当一个任务被取消后，不在执行，需要客户端（用户）在任务实现中去检查线程中断状态
+    // 取消一个正在执行的任务。|mayInterruptIfRunning|表示：是否发送"中断请求"给正在执行的任务
+    // 注：要想真正的实现：当一个任务被取消后，不再执行，需要客户端（用户）在任务实现中去检查线程中断状态
     public boolean cancel(boolean mayInterruptIfRunning) {
         // 被取消的任务必须正在执行。若任务需要中断，则设置任务的状态为|INTERRUPTING|，表示正在中断
         if (!(state == NEW &&
@@ -284,8 +284,8 @@ public class FutureTask<V> implements RunnableFuture<V> {
         }
     }
 
-    // 运行一个任务，任务结束后，|state|会自动流转到下一个状态；并且在任务结束后，|callable|会被清空
-    // 注：任务不可以重复运行
+    // 任务执行入口方法。任务结束后，|state|会自动流转到下一个状态；并且在任务结束后，|callable|会被清空
+    // 任务不可以重复运行
     public void run() {
         // 任务非新建状态（说明已完成，或被终止）；或设置任务所有权失败（说明被其他线程执行中），直接返回
         // 注：一个任务只能被执行一次，并且只能由一个线程执行
@@ -335,7 +335,8 @@ public class FutureTask<V> implements RunnableFuture<V> {
      *
      * @return {@code true} if successfully run and reset
      */
-    // 运行一个任务，任务非异常结束后，|state|不会变更状态；并且在任务非异常结束后，|callable|不会被清空
+    // 运行一个任务，任务非异常结束后，|state|不会变更状态；并且在任务非异常结束后，|callable|不会
+    // 被清空
     // 注：任务可以重复运行，只要任务不抛出异常
     protected boolean runAndReset() {
         if (state != NEW ||
