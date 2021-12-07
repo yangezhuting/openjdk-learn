@@ -5,9 +5,15 @@
 # charsets.jar
 sun/nio
 sun/awt
-! jce.jar
+# jce.jar
 javax/crypto
 sun/security
+META-INF/ORACLE_J.RSA
+META-INF/ORACLE_J.SF
+# jfr.jar
+oracle/jrockit/
+jdk/jfr
+com/oracle/jrockit/
 ! jsse.jar
 sun/security
 com/sun/net/
@@ -52,20 +58,24 @@ java/
 org/ietf/
 com/sun/beans/
 com/sun/tracing/
+apple/launcher/
 com/sun/java/browser/
 com/sun/corba/
 com/sun/media/
 com/sun/awt/
 com/sun/management/
 sun/
+apple/applescript/
 com/sun/jmx/
 com/sun/demo/
+apple/security/
 com/sun/imageio/
-com/sun/net/
 com/sun/rmi/
+com/sun/net/
 org/w3c/
 com/sun/swing/
 com/sun/activation/
+apple/laf/
 com/sun/nio/
 com/sun/rowset/
 org/jcp/
@@ -75,11 +85,13 @@ com/sun/naming/
 org/xml/
 org/omg/
 com/sun/security/
+com/sun/image/
 com/sun/xml/
-com/sun/java/swing/
 com/oracle/
+com/sun/java/swing/
 com/sun/java_cup/
 com/sun/jndi/
+com/apple/
 com/sun/accessibility/
 com/sun/org/
 javax/
