@@ -40,18 +40,21 @@ package java.lang;
  * @see     java.lang.Number
  * @since   JDK1.1
  */
+// 短整型类，对 short 基础类型的封装
 public final class Short extends Number implements Comparable<Short> {
 
     /**
      * A constant holding the minimum value a {@code short} can
      * have, -2<sup>15</sup>.
      */
+    // 最小值 -2的15次方 ，为什么不是16位？因为第一位代表符号位
     public static final short   MIN_VALUE = -32768;
 
     /**
      * A constant holding the maximum value a {@code short} can
      * have, 2<sup>15</sup>-1.
      */
+    // 最大值，2个字节16位， 第1位是符号位，2的15次方-1 是最大值
     public static final short   MAX_VALUE = 32767;
 
     /**
@@ -69,6 +72,7 @@ public final class Short extends Number implements Comparable<Short> {
      * @return the string representation of the specified {@code short}
      * @see java.lang.Integer#toString(int)
      */
+    // 转string类型
     public static String toString(short s) {
         return Integer.toString((int)s, 10);
     }
@@ -141,6 +145,7 @@ public final class Short extends Number implements Comparable<Short> {
      *          contain a parsable {@code short}.
      */
     public static short parseShort(String s) throws NumberFormatException {
+        // 这里很有意思 ： radix  = 10 基数是10位，取的是 0~9的符号
         return parseShort(s, 10);
     }
 

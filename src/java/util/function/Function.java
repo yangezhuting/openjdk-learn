@@ -37,6 +37,7 @@ import java.util.Objects;
  *
  * @since 1.8
  */
+// 函数式接口 : 接收一个入参一个出参的lambda表达式的行为
 @FunctionalInterface
 public interface Function<T, R> {
 
@@ -46,6 +47,7 @@ public interface Function<T, R> {
      * @param t the function argument
      * @return the function result
      */
+    // 该行为表示 一个入参，一个出参
     R apply(T t);
 
     /**
@@ -63,6 +65,8 @@ public interface Function<T, R> {
      *
      * @see #andThen(Function)
      */
+    // 这里和 andThen 很像，有意思的是，先执行参数(即也是一个Function)的，再执行调用者(同样是一个Function)
+    // 注意 ：这里返回的是一个 函数式 接口，相当于返回的一个 lambda 表达式
     default <V> Function<V, R> compose(Function<? super V, ? extends T> before) {
         Objects.requireNonNull(before);
         return (V v) -> apply(before.apply(v));
@@ -83,6 +87,8 @@ public interface Function<T, R> {
      *
      * @see #compose(Function)
      */
+    // 先执行调用者，再执行参数，和compose相反。
+    // 注意 ：这里返回的是一个 函数式 接口，相当于返回的一个 lambda 表达式
     default <V> Function<T, V> andThen(Function<? super R, ? extends V> after) {
         Objects.requireNonNull(after);
         return (T t) -> after.apply(apply(t));
@@ -94,6 +100,7 @@ public interface Function<T, R> {
      * @param <T> the type of the input and output objects to the function
      * @return a function that always returns its input argument
      */
+    // 返回当前正在执行的方法
     static <T> Function<T, T> identity() {
         return t -> t;
     }

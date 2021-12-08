@@ -140,7 +140,7 @@ import java.util.stream.StreamSupport;
  * @see     AbstractCollection
  * @since 1.2
  */
-
+// 收集 : 继承了一个描述 可迭代的 接口。 说明当前 Collection 也是一个可迭代的容器。
 public interface Collection<E> extends Iterable<E> {
     // Query Operations
 
@@ -151,6 +151,7 @@ public interface Collection<E> extends Iterable<E> {
      *
      * @return the number of elements in this collection
      */
+    //返回当前容器中元素的数量
     int size();
 
     /**
@@ -158,6 +159,7 @@ public interface Collection<E> extends Iterable<E> {
      *
      * @return <tt>true</tt> if this collection contains no elements
      */
+    //判断当前容器是不是空的
     boolean isEmpty();
 
     /**
@@ -176,6 +178,7 @@ public interface Collection<E> extends Iterable<E> {
      *         collection does not permit null elements
      *         (<a href="#optional-restrictions">optional</a>)
      */
+    // 判断当前容器中是否包含某一个对象
     boolean contains(Object o);
 
     /**
@@ -186,6 +189,7 @@ public interface Collection<E> extends Iterable<E> {
      *
      * @return an <tt>Iterator</tt> over the elements in this collection
      */
+    //返回当前容器的迭代器
     Iterator<E> iterator();
 
     /**
@@ -204,6 +208,7 @@ public interface Collection<E> extends Iterable<E> {
      *
      * @return an array containing all of the elements in this collection
      */
+    //容器转对象数组
     Object[] toArray();
 
     /**
@@ -249,6 +254,7 @@ public interface Collection<E> extends Iterable<E> {
      *         this collection
      * @throws NullPointerException if the specified array is null
      */
+    // 容器根据声明的 类型 来转成 明确的类型 的数组。
     <T> T[] toArray(T[] a);
 
     // Modification Operations
@@ -286,6 +292,7 @@ public interface Collection<E> extends Iterable<E> {
      * @throws IllegalStateException if the element cannot be added at this
      *         time due to insertion restrictions
      */
+    //给当前容器添加一个元素
     boolean add(E e);
 
     /**
@@ -308,6 +315,7 @@ public interface Collection<E> extends Iterable<E> {
      * @throws UnsupportedOperationException if the <tt>remove</tt> operation
      *         is not supported by this collection
      */
+    //给当前容器删除一个元素
     boolean remove(Object o);
 
 
@@ -331,6 +339,7 @@ public interface Collection<E> extends Iterable<E> {
      *         or if the specified collection is null.
      * @see    #contains(Object)
      */
+    // 当前容器中是否包含所有的 传入的容器的元素
     boolean containsAll(Collection<?> c);
 
     /**
@@ -357,6 +366,7 @@ public interface Collection<E> extends Iterable<E> {
      *         this time due to insertion restrictions
      * @see #add(Object)
      */
+    // 给容器添加一个容器里面的所有元素 (添加的容器的元素 可以 是当前容器的元素的子类 )
     boolean addAll(Collection<? extends E> c);
 
     /**
@@ -382,6 +392,7 @@ public interface Collection<E> extends Iterable<E> {
      * @see #remove(Object)
      * @see #contains(Object)
      */
+    // 删除当前容器中 所有在 c 器容中的元素
     boolean removeAll(Collection<?> c);
 
     /**
@@ -406,6 +417,8 @@ public interface Collection<E> extends Iterable<E> {
      *         supported.
      * @since 1.8
      */
+    // 这里有个默认实现，可以按条件来删除容器中的元素
+    // 这里的入参是一个 lambda 表达式，且 lambda 表达式 只有一个返回值，这个返回值用来断言是否删除。
     default boolean removeIf(Predicate<? super E> filter) {
         Objects.requireNonNull(filter);
         boolean removed = false;
@@ -450,6 +463,7 @@ public interface Collection<E> extends Iterable<E> {
      * @throws UnsupportedOperationException if the <tt>clear</tt> operation
      *         is not supported by this collection
      */
+    // 删除容器中所有元素
     void clear();
 
 
@@ -488,6 +502,7 @@ public interface Collection<E> extends Iterable<E> {
      * @see Set#equals(Object)
      * @see List#equals(Object)
      */
+    // 是否相等
     boolean equals(Object o);
 
     /**
@@ -557,6 +572,7 @@ public interface Collection<E> extends Iterable<E> {
      * @return a {@code Spliterator} over the elements in this collection
      * @since 1.8
      */
+    // 可分割迭代器
     @Override
     default Spliterator<E> spliterator() {
         return Spliterators.spliterator(this, 0);

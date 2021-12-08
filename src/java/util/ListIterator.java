@@ -57,6 +57,15 @@ package java.util;
  * @see List#listIterator()
  * @since   1.2
  */
+// 这是一个 List 的迭代器的 接口，它继承了最基础的迭代器类
+// 同时扩展了一些 和 集合相关的方法 如下 ：
+// hasPrevious() 当前元素之前是否有元素
+// previous() 返回当前元素之前的元素
+// nextIndex() 一下个元素的索引位置
+// previousIndex() 前一个元素的索引位置
+// remove() 删除某个元素
+// void set(E e) 设置一个元素(把原有元素替换)
+// void add(E e) 新增一个元素
 public interface ListIterator<E> extends Iterator<E> {
     // Query Operations
 

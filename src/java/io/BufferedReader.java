@@ -66,7 +66,7 @@ import java.util.stream.StreamSupport;
  * @author      Mark Reinhold
  * @since       JDK1.1
  */
-
+// 缓冲阅读器
 public class BufferedReader extends Reader {
 
     private Reader in;

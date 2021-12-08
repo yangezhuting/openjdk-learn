@@ -166,5 +166,6 @@ package java.io;
  * @see java.io.Externalizable
  * @since   JDK1.1
  */
+// 一个标识接口，表示可序列化的
 public interface Serializable {
 }

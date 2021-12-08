@@ -64,5 +64,7 @@ package java.util;
  *
  * @since 1.4
  */
+// RandomAccess接口这个空架子的存在，是为了能够更好地判断集合是否ArrayList或者LinkedList，
+// 从而能够更好选择更优的遍历方式，提高性能！
 public interface RandomAccess {
 }

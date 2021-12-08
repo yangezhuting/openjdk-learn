@@ -93,6 +93,7 @@ import java.util.*;
  * @see java.util.Comparator
  * @since 1.2
  */
+// 可比较的，声明了一个 比较方法
 public interface Comparable<T> {
     /**
      * Compares this object with the specified object for order.  Returns a

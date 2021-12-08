@@ -55,7 +55,7 @@ import java.util.stream.StreamSupport;
  * @since 1.4
  * @spec JSR-51
  */
-
+// 字符序列
 public interface CharSequence {
 
     /**
@@ -64,6 +64,7 @@ public interface CharSequence {
      *
      * @return  the number of <code>char</code>s in this sequence
      */
+    // 字符长度
     int length();
 
     /**

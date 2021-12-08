@@ -52,6 +52,8 @@ package java.lang;
  * @jls 5.1.3 Narrowing Primitive Conversions
  * @since   JDK1.0
  */
+// 表示当前是一个可序列化的类
+// 数字类，是一个抽象类，定义了一些抽象方法
 public abstract class Number implements java.io.Serializable {
     /**
      * Returns the value of the specified number as an {@code int},
@@ -60,6 +62,7 @@ public abstract class Number implements java.io.Serializable {
      * @return  the numeric value represented by this object after conversion
      *          to type {@code int}.
      */
+    // 获取整型值 4个字节
     public abstract int intValue();
 
     /**
@@ -69,6 +72,7 @@ public abstract class Number implements java.io.Serializable {
      * @return  the numeric value represented by this object after conversion
      *          to type {@code long}.
      */
+    // 长整型值 8个字节
     public abstract long longValue();
 
     /**
@@ -78,6 +82,7 @@ public abstract class Number implements java.io.Serializable {
      * @return  the numeric value represented by this object after conversion
      *          to type {@code float}.
      */
+    // 浮点型值
     public abstract float floatValue();
 
     /**
@@ -87,6 +92,7 @@ public abstract class Number implements java.io.Serializable {
      * @return  the numeric value represented by this object after conversion
      *          to type {@code double}.
      */
+    // 双精度浮点型值
     public abstract double doubleValue();
 
     /**
@@ -100,6 +106,7 @@ public abstract class Number implements java.io.Serializable {
      *          to type {@code byte}.
      * @since   JDK1.1
      */
+    // byte值 1个字节
     public byte byteValue() {
         return (byte)intValue();
     }
@@ -115,6 +122,7 @@ public abstract class Number implements java.io.Serializable {
      *          to type {@code short}.
      * @since   JDK1.1
      */
+    // 短整型值 2个字节
     public short shortValue() {
         return (short)intValue();
     }

@@ -48,6 +48,7 @@ public class UnsupportedOperationException extends RuntimeException {
      *
      * @param message the detail message
      */
+    // 表示不支持的操作异常，一般如果某个接口的方法没有实现，会抛出这个异常
     public UnsupportedOperationException(String message) {
         super(message);
     }

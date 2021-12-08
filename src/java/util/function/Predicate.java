@@ -36,6 +36,10 @@ import java.util.Objects;
  *
  * @since 1.8
  */
+// 这是一个函数式接口，函数式接口支持 lambda 表达式
+// 这是JAVA 帮我们声明好的一个通用的函数式接口，只有一个入参。
+// 我们会看到有一个 test 方法，返回值为bool 类型。
+// 个人理解 ： 主要用于 不需要在 lambda 程序块中返回值，且只有一个参数的时候使用。 用于断言
 @FunctionalInterface
 public interface Predicate<T> {
 
@@ -64,6 +68,7 @@ public interface Predicate<T> {
      * AND of this predicate and the {@code other} predicate
      * @throws NullPointerException if other is null
      */
+    // A lambda 表达式的返回结果 与 B lambda 表达式的返回结果 进行 && (与) 操作，返回(与)操作后结果。
     default Predicate<T> and(Predicate<? super T> other) {
         Objects.requireNonNull(other);
         return (t) -> test(t) && other.test(t);
@@ -76,6 +81,7 @@ public interface Predicate<T> {
      * @return a predicate that represents the logical negation of this
      * predicate
      */
+    // 对 A lambda 表达式的返回结果 取反，并返回
     default Predicate<T> negate() {
         return (t) -> !test(t);
     }
@@ -96,6 +102,7 @@ public interface Predicate<T> {
      * OR of this predicate and the {@code other} predicate
      * @throws NullPointerException if other is null
      */
+    // A lambda 表达式的返回结果 与 B lambda 表达式的返回结果 进行 || (或) 操作，返回(或)操作后结果。
     default Predicate<T> or(Predicate<? super T> other) {
         Objects.requireNonNull(other);
         return (t) -> test(t) || other.test(t);
@@ -111,6 +118,7 @@ public interface Predicate<T> {
      * @return a predicate that tests if two arguments are equal according
      * to {@link Objects#equals(Object, Object)}
      */
+    // 返回一个判断对象是否为空的函数引用 或者 一个判断是否相等的 lambda 表达式
     static <T> Predicate<T> isEqual(Object targetRef) {
         return (null == targetRef)
                 ? Objects::isNull

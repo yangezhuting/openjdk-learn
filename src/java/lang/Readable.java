@@ -34,6 +34,7 @@ import java.io.IOException;
  *
  * @since 1.5
  */
+// 可读的
 public interface Readable {
 
     /**
@@ -49,5 +50,6 @@ public interface Readable {
      * @throws NullPointerException if cb is null
      * @throws java.nio.ReadOnlyBufferException if cb is a read only buffer
      */
+    // 读数据
     public int read(java.nio.CharBuffer cb) throws IOException;
 }

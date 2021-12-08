@@ -51,6 +51,7 @@ import java.util.function.Consumer;
  * @see Iterable
  * @since 1.2
  */
+//迭代器的基类 : java 所有的需要迭代器的类都会实现这个接口
 public interface Iterator<E> {
     /**
      * Returns {@code true} if the iteration has more elements.
@@ -59,6 +60,7 @@ public interface Iterator<E> {
      *
      * @return {@code true} if the iteration has more elements
      */
+    // 是否还有下一个
     boolean hasNext();
 
     /**
@@ -67,6 +69,7 @@ public interface Iterator<E> {
      * @return the next element in the iteration
      * @throws NoSuchElementException if the iteration has no more elements
      */
+    // 下一个元素
     E next();
 
     /**
@@ -89,6 +92,7 @@ public interface Iterator<E> {
      *         been called after the last call to the {@code next}
      *         method
      */
+    // 默认的删除方法，没有实现时会默认给一个没有支持的操作异常（表示接口的这个方法没有实现）
     default void remove() {
         throw new UnsupportedOperationException("remove");
     }
@@ -110,6 +114,7 @@ public interface Iterator<E> {
      * @throws NullPointerException if the specified action is null
      * @since 1.8
      */
+    // 循环剩余的数据，入参是只有一个参数的消费者，且lambda 程序块没有返回值，且传入类型必须是当前类型或者当前类型的父类
     default void forEachRemaining(Consumer<? super E> action) {
         Objects.requireNonNull(action);
         while (hasNext())

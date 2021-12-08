@@ -37,6 +37,8 @@ package java.util.function;
  *
  * @since 1.8
  */
+// 这是一个无入参的 lambda 表达式
+// 使用lambda 表达式结构为 ： ()-> { retun xxx;} 有一个返回参数
 @FunctionalInterface
 public interface Supplier<T> {
 

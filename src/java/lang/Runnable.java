@@ -52,6 +52,7 @@ package java.lang;
  * @see     java.util.concurrent.Callable
  * @since   JDK1.0
  */
+// 可运行的，定义了一个抽象方法 run()
 @FunctionalInterface
 public interface Runnable {
     /**

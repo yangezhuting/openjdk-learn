@@ -105,6 +105,8 @@ import java.util.Comparators;
  * @see java.io.Serializable
  * @since 1.2
  */
+// 比较器 : 比较两个参数 , 这是一个函数式接口，支持lambda
+// int compare(T o1, T o2)
 @FunctionalInterface
 public interface Comparator<T> {
     /**

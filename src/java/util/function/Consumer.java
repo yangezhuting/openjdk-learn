@@ -38,6 +38,11 @@ import java.util.Objects;
  *
  * @since 1.8
  */
+// 这是一个函数式接口，函数式接口支持 lambda 表达式
+// 这是JAVA 帮我们声明好的一个通用的函数式接口，只有一个入参。
+// 我们看到这个消费者类 只有一个 accept 的方法，没有返回值。
+// 个人理解 ： 这个类主要是用于消费者（只消费，没有返回值），且只有一个参数的 lambda 表达式。
+// 它与 Predicate<T> 函数式接口还是有些区别的，Predicate<T> 会有一个test 方法，会有返回值。
 @FunctionalInterface
 public interface Consumer<T> {
 

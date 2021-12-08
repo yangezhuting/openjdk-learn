@@ -47,7 +47,7 @@ package java.io;
  * @author      Mark Reinhold
  * @since       JDK1.1
  */
-
+// 读者
 public abstract class Reader implements Readable, Closeable {
 
     /**

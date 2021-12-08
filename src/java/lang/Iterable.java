@@ -42,6 +42,12 @@ import java.util.function.Consumer;
  * @since 1.5
  * @jls 14.14.2 The enhanced for statement
  */
+// 可迭代的 ： 不要和 Iterator 搞混了，这是两个东西
+// Iterator 是迭代器
+// Iterable 当前接口 更像是一个描述，描述一下可迭代的 类里面都会有些什么
+// 声明的方法如下 :
+// Iterator<T> iterator() 该方法会返回一个迭代器 Iterator 。
+// default void forEach(Consumer<? super T> action)  该方法会有个循环方法，支持单个参数的 lambda 表达式
 public interface Iterable<T> {
     /**
      * Returns an iterator over elements of type {@code T}.
