@@ -134,8 +134,8 @@ import java.util.function.Function;
  * @see     Hashtable
  * @since   1.2
  */
-// 存储 k-v 键值对的无序映射表；可根据 k 访问 v；键数据类型依赖 equals(), hashCode()
-// 部分接口会使“值”也依赖 equals()，如：containsValue()。如果使用 EntrySet 视图，“值”会依赖 equals()
+// 存储 k-v 键值对的无序映射表；可根据|k|访问|v|；键数据类型依赖|equals, hashCode|方法
+// 部分接口会使“值”也依赖|equals|，如：|containsValue|。如果使用|EntrySet|视图，“值”会依赖|equals|
 public class HashMap<K,V> extends AbstractMap<K,V>
     implements Map<K,V>, Cloneable, Serializable {
 

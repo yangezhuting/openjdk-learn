@@ -169,16 +169,26 @@ public class CountDownLatch {
             return getState();
         }
 
+        // 查看计数器是否已递减到0
+        // 注：当计数器递减到0时，方法总是返回一个正数，表示任何等待的线程都可以获取到资源
+        // 注：抽象方法|tryAcquireShared|的返回值，负值是获取失败；0是获取成功，但没有剩余资
+        // 源；正数是获取成功，且还有剩余资源，其他线程还可以去获取
         protected int tryAcquireShared(int acquires) {
             return (getState() == 0) ? 1 : -1;
         }
 
+        // 共享方式，尝试释放资源。释放成功返回true，失败返回false
         protected boolean tryReleaseShared(int releases) {
             // Decrement count; signal when transition to zero
             for (;;) {
+                // 检查当前计数器资源，若已递减到0，直接返回false
+                // 注：此处未使用原子比较操作，可能会导致计数器资源被减为负数
+                // 注：todo - 此处应该将判定逻辑从|c==0|改为|c<=0|
                 int c = getState();
                 if (c == 0)
                     return false;
+
+                // CAS重置计数器资源
                 int nextc = c-1;
                 if (compareAndSetState(c, nextc))
                     return nextc == 0;

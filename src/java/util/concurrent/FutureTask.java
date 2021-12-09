@@ -61,7 +61,7 @@ import java.util.concurrent.locks.LockSupport;
  * @param <V> The result type returned by this FutureTask's {@code get} methods
  */
 // 实现了Runner接口，可由线程池execute方法执行；重写的run方法，会将结果广播给所有等待者
-// 精华：操作"等待结果"链表时，不使用互斥锁。因为代码实现的目的很单一，即，清除所有待删除的
+// 亮点：操作"等待结果"链表时，不使用互斥锁。因为代码实现的目的很单一，即，清除所有待删除的
 // 节点。也就无需担心链表在多线程中执行删除时，即使一个节点指向了被其他线程删除的节点，在下
 // 次循环也会被删除；更不会出现一个有效的节点被勿删除了，因为新增的节点总是在头部，这也是只
 // 有在操作头节点时，使用CAS计算

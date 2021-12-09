@@ -286,6 +286,33 @@ import sun.misc.Unsafe;
  * @since 1.5
  * @author Doug Lea
  */
+// 多线程访问共享资源的同步器框架，它是实现同步器的基础组件
+// 亮点：头引用始终指向一个dummy node，它可以非常巧妙的实现线程安全
+// 说明：引入dummy node可以让线程安全简单化：当队列中存在一个以上的节点，|head|和|last|的
+// 指向就不可能相同。在头删、尾插算法中，会去修改各自的节点，也就不会有线程安全问题；如不设
+// dummy node，当队列中不存在或只有一个节点，|head|和|last|的值相同，需要区别处理，且要
+// 引入同步
+//
+// 工作机制：
+// 1.资源消费者：获取不到资源时，该线程会被加入等待队列，每当在等待队列中新增一个节点时，总是
+// 会将它的前驱节点中的等待状态字段，从0设置为|SIGNAL|，然后再挂起自己
+// 2.资源生产者：当资源的持有者执行释放资源后，会将|head|头节点的中的等待状态字段，从|SIGNAL|
+// 设置为0，然后再唤醒它后驱节点关联的线程
+// 3.当关联线程被唤醒后（资源消费者），它将再次尝试获取资源。若失败，它将被再次挂起。若成功，对
+// 于独占资源，会直接返回；对于共享资源，如果剩余资源大于0，则唤醒后续的等待节点（唤醒流程：将新
+// 的|head|头节点的中的等待状态，从SIGNAL设置为0，然后唤醒它后驱节点关联的线程）。形成一个顺序
+// 的链式的唤醒
+// 说明1：唤醒机制为什么不设计成：生产者释放资源时，查找等待队列，将第一个有效等待者的状态设置成"已
+// 通知"，然后唤醒其关联的线程了？其实该流程，弊端就在：生产者在释放资源时，需要遍历队列；另外，由
+// 于节点被通知、被取消都复用了一个状态字段，在遍历时，势必需要跳过已被取消的节点、而在取消时，又可
+// 能需要将"已通知"的状态转移到下一个有效的节点。  而采用了现有的设计，以上两个问题都将不存在！头节
+// 点是一个dummy node，它没有被取消的逻辑或者说场景；并且生产者释放资源时，也无需遍历队列，仅仅将
+// 头节点（该节点始终存在）状态设置成"已通知"即可，而被唤醒的消费者，也仅仅需要查看其前驱节点是否为
+// 头节点，以此查看该通知是否是发给自己的
+// 说明2：要理解这个算法也很容易：我们可以把|dummy node|头节点看作资源的生产者，除了它以外，后续
+// 全部是等待资源的消费者。当有资源被释放时，信号通知会被生产者线程放置到头节点上，并主动唤醒首个消
+// 费者，该消费者获取资源后，被清除（删除老的|dummy node|头节点，让其成为新的）。在独占模式中，此
+// 时就可以返回了；在共享模式中，消费者返回之前，若有剩余资源，它还会通知下一个消费者。流程如上
 public abstract class AbstractQueuedSynchronizer
     extends AbstractOwnableSynchronizer
     implements java.io.Serializable {
@@ -379,20 +406,29 @@ public abstract class AbstractQueuedSynchronizer
      */
     static final class Node {
         /** Marker to indicate a node is waiting in shared mode */
+        // 线程是因为获取共享资源失败，被阻塞添加到队列中
         static final Node SHARED = new Node();
         /** Marker to indicate a node is waiting in exclusive mode */
+        // 线程是因为获取独占资源失败，被阻塞添加到队列中
         static final Node EXCLUSIVE = null;
 
         /** waitStatus value to indicate thread has cancelled */
+        // 当前节点被取消调度
+        // 注：当timeout或被中断（响应中断的情况下），会变更为此状态，进入该状态后将不再变化
         static final int CANCELLED =  1;
         /** waitStatus value to indicate successor's thread needs unparking */
+        // 后继节点在等待当前节点唤醒
+        // 注：后继节点入队时，会将前继结点的状态更新为SIGNAL
         static final int SIGNAL    = -1;
         /** waitStatus value to indicate thread is waiting on condition */
+        // 节点等待在Condition上，当其他线程调用了|Condition.signal()|方法后，CONDITION状态
+        // 的节点将从等待队列转移到同步队列中，等待获取同步锁
         static final int CONDITION = -2;
         /**
          * waitStatus value to indicate the next acquireShared should
          * unconditionally propagate
          */
+        // 下一次共享状态获取，将会传递给后继节点获取这个共享同步状态
         static final int PROPAGATE = -3;
 
         /**
@@ -429,6 +465,7 @@ public abstract class AbstractQueuedSynchronizer
          * CONDITION for condition nodes.  It is modified using CAS
          * (or when possible, unconditional volatile writes).
          */
+        // 节点状态。0为初始状态，负值表示节点处于有效等待状态，而正值表示节点已被取消
         volatile int waitStatus;
 
         /**
@@ -475,6 +512,7 @@ public abstract class AbstractQueuedSynchronizer
          * we save a field by using special value to indicate shared
          * mode.
          */
+        // 节点模式：独占或者共享
         Node nextWaiter;
 
         /**
@@ -519,12 +557,18 @@ public abstract class AbstractQueuedSynchronizer
      * If head exists, its waitStatus is guaranteed not to be
      * CANCELLED.
      */
+    // 头引用指向的节点中的thread始终指向null，是一个"dummy node"
+    // 注：引入dummy node可以让线程安全简单化：当队列中存在一个以上的节点，|head|和|last|的
+    // 指向就不可能相同。在头删、尾插算法中，会去修改各自的节点，也就不会有线程安全问题；如不设
+    // dummy node，当队列中不存在或只有一个节点，|head|和|last|的值相同，需要区别处理，且要
+    // 引入同步
     private transient volatile Node head;
 
     /**
      * Tail of the wait queue, lazily initialized.  Modified only via
      * method enq to add new wait node.
      */
+    // 尾引用的后驱节点始终是一个null
     private transient volatile Node tail;
 
     /**
@@ -580,13 +624,18 @@ public abstract class AbstractQueuedSynchronizer
      * @param node the node to insert
      * @return node's predecessor
      */
+    // 尾插法添加|node|节点到双向链表
+    // 注：链表中头指针总是指向一个dummy node
     private Node enq(final Node node) {
+        // CAS自旋，加入节点直到成功
         for (;;) {
             Node t = tail;
             if (t == null) { // Must initialize
-                if (compareAndSetHead(new Node()))
-                    tail = head;
+                // 空链表中添加一个dummy node
+                if (compareAndSetHead(new Node()))  // CAS在空链表中添加一个dummy node
+                    tail = head;    // 将尾指针也指向该dummy node
             } else {
+                // 链表中已有节点（包括dummy node），尾插法添加节点到双向链表尾部
                 node.prev = t;
                 if (compareAndSetTail(t, node)) {
                     t.next = node;
@@ -602,17 +651,28 @@ public abstract class AbstractQueuedSynchronizer
      * @param mode Node.EXCLUSIVE for exclusive, Node.SHARED for shared
      * @return the new node
      */
+    // 尾插法，添加一个等待节点到双向链表队列中。返回该新增的节点
+    // 注：双向链表的头部始终指向一个dummy node
     private Node addWaiter(Node mode) {
+        // 创建一个特定模式的等待节点。模式：EXCLUSIVE（独占）和SHARED（共享）
         Node node = new Node(Thread.currentThread(), mode);
+
         // Try the fast path of enq; backup to full enq on failure
+        // 尝试快速的添加|node|节点到一个"非空"的双向链表的尾部
+        // 注：此处是"非空"链表添加节点的优化代码。方法|enq()|包含了在空链表中添加节点
+        // 注：正是因为dummy node的存在，此优化代码工作非常有效。|enq()|只会被执行一次
         Node pred = tail;
         if (pred != null) {
             node.prev = pred;
+            // 确保新的|tail|节点，前驱节点一定是|pred|，以免出现覆盖竞争问题
             if (compareAndSetTail(pred, node)) {
                 pred.next = node;
                 return node;
             }
         }
+
+        // 尾插法，添加一个等待节点到双向链表
+        // 注：|enq()|只会被执行一次；之后|head|始终指向一个dummy node
         enq(node);
         return node;
     }
@@ -624,6 +684,8 @@ public abstract class AbstractQueuedSynchronizer
      *
      * @param node the node
      */
+    // 删除原始的dummy node头节点，将|node|节点设置为新的dummy node头节点
+    // 注：无需考虑链表中"最后一个节点"被删除问题。因为至少有一个dummy node
     private void setHead(Node node) {
         head = node;
         node.thread = null;
@@ -641,6 +703,8 @@ public abstract class AbstractQueuedSynchronizer
          * to clear in anticipation of signalling.  It is OK if this
          * fails or if status is changed by waiting thread.
          */
+
+        // 容错逻辑，将等待状态设置为0
         int ws = node.waitStatus;
         if (ws < 0)
             compareAndSetWaitStatus(node, ws, 0);
@@ -651,13 +715,18 @@ public abstract class AbstractQueuedSynchronizer
          * traverse backwards from tail to find the actual
          * non-cancelled successor.
          */
-        Node s = node.next;
+        Node s = node.next; // 后驱节点
+
+        // 如果后驱节点为空或已被取消
         if (s == null || s.waitStatus > 0) {
             s = null;
+            // 从后向遍历，以找到第一个未被取消的节点
             for (Node t = tail; t != null && t != node; t = t.prev)
                 if (t.waitStatus <= 0)
                     s = t;
         }
+
+        // 唤醒该|s|节点关联的线程
         if (s != null)
             LockSupport.unpark(s.thread);
     }
@@ -667,6 +736,7 @@ public abstract class AbstractQueuedSynchronizer
      * propagation. (Note: For exclusive mode, release just amounts
      * to calling unparkSuccessor of head if it needs signal.)
      */
+    // 从队列头部唤醒一个后继节点关联的线程
     private void doReleaseShared() {
         /*
          * Ensure that a release propagates, even if there are other
@@ -681,17 +751,23 @@ public abstract class AbstractQueuedSynchronizer
          */
         for (;;) {
             Node h = head;
-            if (h != null && h != tail) {
+            if (h != null && h != tail) {   // 等待链表不为空
                 int ws = h.waitStatus;
+                // 头节点dummy node已经被后驱的等待节点置为SIGNAL
                 if (ws == Node.SIGNAL) {
+                    // 更新状态到初始，并唤醒该后驱节点关联的线程
                     if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0))
                         continue;            // loop to recheck cases
-                    unparkSuccessor(h);
+                    unparkSuccessor(h); // 唤醒后驱的等待节点关联的线程
                 }
+                // 头节点dummy node已经发送了信号，将其状态设置为"信号已传播"
                 else if (ws == 0 &&
                          !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
                     continue;                // loop on failed CAS
             }
+            // 若此时链表头已被更新，则说明当前线程在唤醒阶段，其他线程已经唤醒了原始的头节点
+            // 的后驱节点关联的线程。此时我们需要重新遍历链表，以唤醒后续节点关联的线程
+            // 注：todo 若当前线程唤醒了节点关联线程后，链表被更新，就可能会出现唤醒同个线程多次
             if (h == head)                   // loop if head changed
                 break;
         }
@@ -706,8 +782,12 @@ public abstract class AbstractQueuedSynchronizer
      * @param propagate the return value from a tryAcquireShared
      */
     private void setHeadAndPropagate(Node node, int propagate) {
+        // 记录原始头节点dummy node
         Node h = head; // Record old head for check below
+
+        // 跳过原始的头节点dummy node，将|node|设置为新的dummy node
         setHead(node);
+
         /*
          * Try to signal next queued node if:
          *   Propagation was indicated by caller,
@@ -724,10 +804,14 @@ public abstract class AbstractQueuedSynchronizer
          * racing acquires/releases, so most need signals now or soon
          * anyway.
          */
+
+        // 如果还有|propagate|剩余资源大于0，继续唤醒下一个后驱节点关联的线程
+        // 注：只要剩余资源可用，此处就可以实现递归唤醒后续的所有共享节点关联的线程
+        // 注：共享模式实质就是，控制一定量的线程并发执行。只要有资源，就可以唤醒后继等待节点
         if (propagate > 0 || h == null || h.waitStatus < 0 ||
             (h = head) == null || h.waitStatus < 0) {
             Node s = node.next;
-            if (s == null || s.isShared())
+            if (s == null || s.isShared())  // 节点必须是共享模式
                 doReleaseShared();
         }
     }
@@ -739,14 +823,17 @@ public abstract class AbstractQueuedSynchronizer
      *
      * @param node the node
      */
+    // 删除已取消的节点
     private void cancelAcquire(Node node) {
         // Ignore if node doesn't exist
         if (node == null)
             return;
 
+        // 清空已取消节点的线程引用
         node.thread = null;
 
         // Skip cancelled predecessors
+        // 从|node|向前迭代，跳过已取消的节点
         Node pred = node.prev;
         while (pred.waitStatus > 0)
             node.prev = pred = pred.prev;
@@ -763,19 +850,27 @@ public abstract class AbstractQueuedSynchronizer
 
         // If we are the tail, remove ourselves.
         if (node == tail && compareAndSetTail(node, pred)) {
+            // 节点|node|无后驱节点，直接变更尾节点|tail|指针
             compareAndSetNext(pred, predNext, null);
         } else {
             // If successor needs signal, try to set pred's next-link
             // so it will get one. Otherwise wake it up to propagate.
             int ws;
+
+            // 当一个节点有后驱节点时，该前驱节点的状态必须是|SIGNAL|，否则该前驱
+            // 节点要么是被取消的，要么是已被信号通知后重置为0，此时，就需要唤醒后驱
+            // 的|node|节点
+            // 注：此处的节点|pred|不可能是已被取消的节点
             if (pred != head &&
                 ((ws = pred.waitStatus) == Node.SIGNAL ||
                  (ws <= 0 && compareAndSetWaitStatus(pred, ws, Node.SIGNAL))) &&
                 pred.thread != null) {
                 Node next = node.next;
+                // 若|node|的后驱节点还未被取消，更新|pred.next|指针引用，执行删除已取消的节点
                 if (next != null && next.waitStatus <= 0)
                     compareAndSetNext(pred, predNext, next);
             } else {
+                // 前驱节点已被信号通知，唤醒当前节点关联的线程
                 unparkSuccessor(node);
             }
 
@@ -792,19 +887,41 @@ public abstract class AbstractQueuedSynchronizer
      * @param node the node
      * @return {@code true} if thread should block
      */
+    // 当获取资源失败时，检查和更新|pred|的节点状态。如果|node|关联的线程需要挂起，则返回true
+    // 注：该方法应该总是被一个外部获取资源的循环体包裹。参数需满足|pred==node.prev|
+    //
+    // 唤醒的工作机制：
+    // 1.资源消费者：获取不到资源时，该线程会被加入等待队列，每当在等待队列中新增一个节点时，总是
+    // 会将它的前驱节点中的等待状态字段，从0设置为|SIGNAL|，然后再挂起自己
+    // 2.资源生产者：当资源的持有者执行释放资源后，会将|head|头节点的中的等待状态字段，从|SIGNAL|
+    // 设置为0，然后再唤醒它后驱节点关联的线程
+    // 3.当关联线程被唤醒后（资源消费者），它将再次尝试获取资源。若失败，它将被再次挂起。若成功，对
+    // 于独占资源，会直接返回；对于共享资源，如果剩余资源大于0，则唤醒后续的等待节点（唤醒流程：将新
+    // 的|head|头节点的中的等待状态，从SIGNAL设置为0，然后唤醒它后驱节点关联的线程）。形成一个顺序
+    // 的链式的唤醒
     private static boolean shouldParkAfterFailedAcquire(Node pred, Node node) {
         int ws = pred.waitStatus;
+
+        // 前驱结点的状态不是SIGNAL，那么|node|就不能被挂起
         if (ws == Node.SIGNAL)
             /*
              * This node has already set status asking a release
              * to signal it, so it can safely park.
              */
+
+            // 前驱节点的状态在上一次获取资源失败时，已被更新到|SIGNAL|的状
+            // 态，此时返回true，以表线程应该被立即挂起，直至一个信号触发
             return true;
+
         if (ws > 0) {
             /*
              * Predecessor was cancelled. Skip over predecessors and
              * indicate retry.
              */
+
+            // 如果前驱已被取消，向前迭代，直到找到最近一个正常等待信号的节点，将
+            // 当前|node|节点插入到其后面
+            // 注：那些被取消结点，会形成一个无引用的链（尽管它还指向别人），最后被GC
             do {
                 node.prev = pred = pred.prev;
             } while (pred.waitStatus > 0);
@@ -815,6 +932,11 @@ public abstract class AbstractQueuedSynchronizer
              * need a signal, but don't park yet.  Caller will need to
              * retry to make sure it cannot acquire before parking.
              */
+
+            // 更新前驱节点状态，表明|node|节点需要一个信号，以唤醒|node|关联的线程
+            // 注：有可能失败，可能该节点状态已被取消
+            // 注：该方法必须包括在一个获取资源的循环体中。获取资源失败时，再次调
+            // 用本方法将返回true，以表明当前线程应该被挂起，直至一个信号触发
             compareAndSetWaitStatus(pred, ws, Node.SIGNAL);
         }
         return false;
@@ -833,7 +955,11 @@ public abstract class AbstractQueuedSynchronizer
      * @return {@code true} if interrupted
      */
     private final boolean parkAndCheckInterrupt() {
+        // 挂起当前线程
+        // 注：有两种途径可以唤醒该线程：1.unpark() 2.interrupt()
         LockSupport.park(this);
+
+        // 注：|Thread.interrupted()|会清除当前线程的中断标记位
         return Thread.interrupted();
     }
 
@@ -854,23 +980,40 @@ public abstract class AbstractQueuedSynchronizer
      * @param arg the acquire argument
      * @return {@code true} if interrupted while waiting
      */
+    // 若|node|节点前驱是dummy node，尝试获取资源。失败时，挂起节点关联的线程，直到被唤
+    // 醒；再次获取，若成功，则删除原始的dummy node，将|node|设置为新的dummy node
+    // 注：只有当|node|前驱是dummy node，才会尝试获取资源；而成为该节点，是按FIFO策略
+    // 注：整个获取资源过程中，中断被忽略，它将以返回值返回。若被中断过，返回true
     final boolean acquireQueued(final Node node, int arg) {
+        // 是否成功获取到资源
         boolean failed = true;
         try {
+            // 等待过程中是否被中断过
             boolean interrupted = false;
+
+            // 自旋的获取资源，直至获取到成功为止
+            // 注：获取资源过程中，中断被忽略；若有中断，将被当作返回值，返回true
             for (;;) {
                 final Node p = node.predecessor();
+                // 若|node|节点的前驱是dummy node，尝试获取资源
+                // 注：即，有多个等待者节点时，将以|FIFO|优先级排序等待节点
                 if (p == head && tryAcquire(arg)) {
                     setHead(node);
                     p.next = null; // help GC
                     failed = false;
                     return interrupted;
                 }
-                if (shouldParkAfterFailedAcquire(p, node) &&
-                    parkAndCheckInterrupt())
+
+                // 若|node|前驱不是dummy node，或者获取资源失败，尝试挂起当前线程
+                // 注：当资源的持有者执行释放资源时，会唤醒该节点关联的线程；使此处可
+                // 以继续执行循环以再次尝试获取资源
+                if (shouldParkAfterFailedAcquire(p, node)
+                        && parkAndCheckInterrupt() // 挂起当前线程。唤醒后，返回中断状态
+                )
                     interrupted = true;
             }
         } finally {
+            // 如果等待过程中，没有成功获取资源（如timeout，或者可中断的情况下被中断了），那么取消结点
             if (failed)
                 cancelAcquire(node);
         }
@@ -979,20 +1122,40 @@ public abstract class AbstractQueuedSynchronizer
      */
     private void doAcquireSharedInterruptibly(int arg)
         throws InterruptedException {
+        // 添加一个当前线程关联的、共享模式的等待节点到链表尾部
         final Node node = addWaiter(Node.SHARED);
+
+        // 是否成功标志
         boolean failed = true;
         try {
+            // 自旋的获取资源，直至获取到成功为止
+            // 注：获取资源过程中，中断被忽略；若有中断，将被当作返回值，返回true
             for (;;) {
+                // 若|node|节点的前驱是dummy node，尝试获取资源
+                // 注：有多个等待者节点时，将以|FIFO|优先级排序
                 final Node p = node.predecessor();
                 if (p == head) {
+                    // 若获取资源成功（非负数），
                     int r = tryAcquireShared(arg);
                     if (r >= 0) {
+                        // 将|head|指向自己，还有剩余资源可以再唤醒之后的线程
                         setHeadAndPropagate(node, r);
                         p.next = null; // help GC
                         failed = false;
                         return;
                     }
                 }
+
+                // 若|node|前驱不是dummy node、或者若前驱是dummy node，但获取资
+                // 源失败，尝试挂起当前线程
+                // 注：每当在等待队列中新增一个节点时，总是会将它的前驱节点中的等待状
+                // 态字段，设置为|waitStatus=SIGNAL|，然后再挂起自己
+                // 注：当资源的持有者执行释放资源后，会将|head|头节点的中的等待状态
+                // 字段，设置为|waitStatus=0|，然后再唤醒它后驱节点关联的线程
+                // 注：当关联线程被唤醒后，它将再次尝试获取资源。若失败，它将被再次挂
+                // 起。若成功，对于独占资源，会直接返回；对于共享资源，如果剩余资源大
+                // 于0，则唤醒后续等待节点（将新的|head|头节点的中的等待状态，设置为
+                // |waitStatus=0|，然后唤醒它后驱节点关联的线程）。是一个链式唤醒
                 if (shouldParkAfterFailedAcquire(p, node) &&
                     parkAndCheckInterrupt())
                     throw new InterruptedException();
@@ -1194,9 +1357,19 @@ public abstract class AbstractQueuedSynchronizer
      *        {@link #tryAcquire} but is otherwise uninterpreted and
      *        can represent anything you like.
      */
+    // 独占方式，尝试获取资源的入口方法
+    // 注：整个获取资源过程中，中断会被忽略，直到能获取到资源为止
+    // 注：所谓独占模式，获取资源|tryAcquire|要么成功，要么失败。而不是返回一个资源的计数器
     public final void acquire(int arg) {
+        // 1.调用|tryAcquire()|尝试直接获取资源，如果成功，直接返回
+        // 2.如果获取资源失败，将当前线程加入到等待队列尾部，并标记为独占；最后挂起当前线程
+        // 3.当线程被唤醒，会再次尝试获取资源，如果成功，直接返回；失败，会再次被挂起
+        // 注：整个获取资源过程中，中断被忽略，它将以返回值返回
         if (!tryAcquire(arg) &&
-            acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+                acquireQueued(addWaiter(Node.EXCLUSIVE), arg)
+        )
+            // 如果线程在等待过程中被中断，它不会立即响应；但获取资源后，会根据中断状态进行自我中断
+            // 注：|Thread.interrupted()|会清除当前线程的中断标记位，此处需要进行自我中断
             selfInterrupt();
     }
 
@@ -1257,10 +1430,19 @@ public abstract class AbstractQueuedSynchronizer
      *        can represent anything you like.
      * @return the value returned from {@link #tryRelease}
      */
+    // 独占方式，尝试释放资源的入口方法
+    // 注：该方法无需考虑线程安全，故无需CAS计算。因为独占模式，只有资源持有者有权执行释放操作
+    // 注：独占模式下的|tryRelease()|在完全释放掉资源后，才会返回true，进而唤醒等待的线程
     public final boolean release(int arg) {
+        // 调用自定义|tryRelease()|尝试释放资源，如果资源以完全释放，返回true
+        // 注：独占模式中，由于资源持有者已经独占了资源，释放操作都会成功，无需要考虑线程安全
+        // 问题。但要还是要注意其的返回值，它代表着资源是否已经被完成释放掉
         if (tryRelease(arg)) {
             Node h = head;
+            // 若当前资源已经被完全释放，且链表中有等待者线程，唤醒dummy node的后驱等待者
             if (h != null && h.waitStatus != 0)
+                // 唤醒头节点的后驱的等待者节点关联的线程
+                // 注：唤醒等待队列中，最前边的那个未被取消节点关联的线程。FIFO策略
                 unparkSuccessor(h);
             return true;
         }
@@ -1278,7 +1460,18 @@ public abstract class AbstractQueuedSynchronizer
      *        {@link #tryAcquireShared} but is otherwise uninterpreted
      *        and can represent anything you like.
      */
+    // 共享方式，尝试获取资源的入口方法
+    // 注：非公平策略。即，每个线程获取资源时，会首先抢占加塞一次，而不管队列中可能还有别的线程在等待
+    // 注：整个获取资源过程中，中断会被忽略，直到能获取到资源为止
+    // 注：共享模式，获取资源|tryAcquireShared|返回一个资源的计数器。而不是返回获取成功与否的状态
+    // 注：共享模式实质就是，控制一定量的线程并发执行。只要有资源被释放掉，就可以唤醒后继等待节点
     public final void acquireShared(int arg) {
+        // 1.调用自定义|tryAcquireShared()|尝试直接获取资源，如果成功，直接返回
+        // 2.若获取失败时，将当前线程加入到等待队列尾部，并标记为共享；最后挂起当前线程
+        // 3.当线程被唤醒，会再次尝试获取资源，如果成功，直接返回；失败会再次被挂起
+        // 注：整个获取资源过程中，中断被忽略，它将以返回值返回
+        // 注：抽象方法|tryAcquireShared()|返回值，负值是获取失败；0是获取成功，但没有剩余资源；
+        // 正数是获取成功，且还有剩余资源，其他线程还可以去获取
         if (tryAcquireShared(arg) < 0)
             doAcquireShared(arg);
     }
@@ -1300,6 +1493,8 @@ public abstract class AbstractQueuedSynchronizer
             throws InterruptedException {
         if (Thread.interrupted())
             throw new InterruptedException();
+
+        // 共享方式，尝试获取资源。若资源不可用，则将当前线程添加至等待队列中
         if (tryAcquireShared(arg) < 0)
             doAcquireSharedInterruptibly(arg);
     }
@@ -1337,8 +1532,13 @@ public abstract class AbstractQueuedSynchronizer
      *        and can represent anything you like.
      * @return the value returned from {@link #tryReleaseShared}
      */
+    // 共享方式，尝试释放资源的入口方法。释放成功返回true，失败返回false
+    // 注：共享模式下的|tryReleaseShared|在释放资源后，会直接返回true，进而尝试唤醒等待线程
+    // 注：共享模式实质就是，控制一定量的线程并发执行。只要有资源被释放掉，就可以唤醒后继等待节点
     public final boolean releaseShared(int arg) {
+        // 尝试释放资源
         if (tryReleaseShared(arg)) {
+            // 从队列头部唤醒一个后继节点关联的线程
             doReleaseShared();
             return true;
         }

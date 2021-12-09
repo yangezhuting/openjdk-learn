@@ -130,6 +130,8 @@ public class ReentrantLock implements Lock, java.io.Serializable {
             final Thread current = Thread.currentThread();
             int c = getState();
             if (c == 0) {
+                // 直接尝试获取锁
+                // 注：非公平策略。即，每个线程获取锁时，会首先抢占加塞一次，而不管队列中可能还有别的线程在等待
                 if (compareAndSetState(0, acquires)) {
                     setExclusiveOwnerThread(current);
                     return true;
@@ -145,15 +147,26 @@ public class ReentrantLock implements Lock, java.io.Serializable {
             return false;
         }
 
+        // 尝试释放锁，将其持锁计数器减1。若计数器递减到0，清空所有权，返回true；若还未到0，返回false
+        // 注：非持有者线程直接调用此方法，将立即抛出异常。场景：没有|lock|而直接调用|unlock|
+        // 注：该方法无需考虑线程安全，故无需CAS计算。因为独占模式，只有锁持有者有权执行释放锁
         protected final boolean tryRelease(int releases) {
-            int c = getState() - releases;
+            int c = getState() - releases;  // 持锁计数器减1
+            // 检查当前锁的持有者：解锁和持有者线程必须是相同的。这也是独占模式的语义
+            // 注：调用|lock()|获取锁时，非持有者线程都将被阻塞，不可能再调用解锁方法
             if (Thread.currentThread() != getExclusiveOwnerThread())
                 throw new IllegalMonitorStateException();
+
+            // 锁是否已经被完全释放（持锁计数器为0）
             boolean free = false;
+
+            // 若当前持锁计数器已经为0，清空互斥锁的所有者，返回true
             if (c == 0) {
                 free = true;
                 setExclusiveOwnerThread(null);
             }
+
+            // 重新设置当前锁的持锁计数器
             setState(c);
             return free;
         }
@@ -202,13 +215,18 @@ public class ReentrantLock implements Lock, java.io.Serializable {
          * Performs lock.  Try immediate barge, backing up to normal
          * acquire on failure.
          */
+        // 非公平获取锁
+        // 注：非公平策略。即，每个线程获取锁时，会首先抢占加塞一次，而不管队列中可能还有别的线程在等待
         final void lock() {
+            // 直接尝试获取锁
             if (compareAndSetState(0, 1))
                 setExclusiveOwnerThread(Thread.currentThread());
             else
                 acquire(1);
         }
 
+        // 非公平获取锁
+        // 注：非公平策略。即，每个线程获取锁时，会首先抢占加塞一次，而不管队列中可能还有别的线程在等待
         protected final boolean tryAcquire(int acquires) {
             return nonfairTryAcquire(acquires);
         }
@@ -228,23 +246,35 @@ public class ReentrantLock implements Lock, java.io.Serializable {
          * Fair version of tryAcquire.  Don't grant access unless
          * recursive call or no waiters or is first.
          */
+        // 尝试获取锁，并设置锁的所有权为当前线程。获取成功返回true，失败返回false
+        // 注：若其他线程已持有了该锁，返回false；否则将持锁计数器加一
         protected final boolean tryAcquire(int acquires) {
             final Thread current = Thread.currentThread();
             int c = getState();
-            if (c == 0) {
+            if (c == 0) {   // 持锁计数器为0
+                // CAS设置互斥锁的持锁计数器为1，表示它已被锁定
+                // 注：若队列中有等待者节点，但第一个等待者线程是不是当前线程，则跳过获取锁逻辑
+                // 注：即，公平锁，以FIFO优先级获取锁
                 if (!hasQueuedPredecessors() &&
                     compareAndSetState(0, acquires)) {
+                    // 将互斥锁所有权设置为当前线程
                     setExclusiveOwnerThread(current);
                     return true;
                 }
             }
-            else if (current == getExclusiveOwnerThread()) {
+            else if (current == getExclusiveOwnerThread()) {    // 已被锁定，并且持有该锁的就是当前线程
+                // 将锁的持锁计数器加一
+                // 注：以下代码没有线程安全问题，故无需CAS操作。因为锁的持有者只能是一个
                 int nextc = c + acquires;
+                // 重入次数整型溢出
                 if (nextc < 0)
                     throw new Error("Maximum lock count exceeded");
+
                 setState(nextc);
                 return true;
             }
+
+            // 互斥锁已被其他线程锁定
             return false;
         }
     }
@@ -281,7 +311,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
      * purposes and lies dormant until the lock has been acquired,
      * at which time the lock hold count is set to one.
      */
-    // 获取锁
+    // 独占获取锁
     // 1.如果该锁没有被另一个线程持有，则获取该锁并立即返回，将锁的持锁计数器设置为1
     // 2.如果当前线程已经持有该锁，则将持锁计数器加1，并且该方法立即返回。即，可重入锁
     // 3.如果该锁被另一个线程持有，则在获得锁之前，该线程将一直处于休眠状态，此时锁的
@@ -337,6 +367,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
      *
      * @throws InterruptedException if the current thread is interrupted
      */
+    // 独占获取锁
     // 1.如果当前线程未被中断，则获取锁
     // 2.如果该锁没有被另一个线程持有，则获取该锁并立即返回，将锁的保持计数器设置为1
     // 3.如果当前线程已经持有该锁，则将持锁计数器加1，并且该方法立即返回。即，可重入锁
@@ -382,7 +413,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
      *         current thread, or the lock was already held by the current
      *         thread; and {@code false} otherwise
      */
-    // 仅在调用时锁未被另一个线程持有的情况下，才获取该锁
+    // 仅在调用时锁未被另一个线程持有的情况下，才独占的获取该锁
     // 1.如果该锁没有被另一个线程持有，并且立即返回true值，则将锁的持有计数器设置为1。即使已将此锁
     // 设置为使用公平排序策略，但是调用 tryLock() 仍将立即获取锁（如果有可用的），而不管其他线程当
     // 前是否正在等待该锁。在某些情况下，此“闯入”行为可能很有用，即使它会打破公平性也如此。如果希望遵

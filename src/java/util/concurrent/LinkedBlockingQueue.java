@@ -78,7 +78,11 @@ import java.util.function.Consumer;
  * @param <E> the type of elements held in this collection
  */
 // 单向链表实现的阻塞队列。支持先进先出FIFO
-// 精华：头引用始终指向一个dummy node节点（元素是null），它可以非常巧妙的实现线程安全
+// 亮点：头引用始终指向一个dummy node节点（元素是null），它可以非常巧妙的实现线程安全
+// 说明：在本阻塞队列算法中，使用了不同的互斥锁来保护生产、消费动作。该dummy node可以让
+// 线程安全简单化：当队列中存在一个以上的节点，|head|和|last|的指向就不可能相同，而生
+// 产、消费算法中，会去修改各自的节点，也就不会有线程安全问题；如不设dummy node，当队
+// 列中不存在或只有一个节点，|head|和|last|的值都相同，需要区别处理，且要引入同步
 public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         implements BlockingQueue<E>, java.io.Serializable {
     private static final long serialVersionUID = -6903933977591709194L;
@@ -149,9 +153,6 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * Invariant: head.item == null
      */
     // 消费指针。头引用指向的节点中的元素始终指向null，是一个"dummy node"
-    // 注：在本阻塞队列算法中，使用了不同的互斥锁来保护生产、消费动作。该"dummy node"可以
-    // 让线程安全简单化：当队列中存在一个以上的节点，|head|和|last|指向就不可能相同，而生
-    // 产、消费算法中，会去修改各自的指针，也就不会有线程安全问题
     transient Node<E> head; // 头节点指针
 
     /**
@@ -232,10 +233,8 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         Node<E> first = h.next;
         h.next = h; // help GC
 
-        // 将头节点指向将要被消费的节点，然后设置其为新的dummy node，并将其中的存储的元素值返回
-        // 注：在本阻塞队列算法中，使用了不同的互斥锁来保护生产、消费动作。该dummy node可以让线
-        // 程安全简单化：当队列中存在一个以上的节点，|head|和|last|指向就不可能相同，而生产、消
-        // 费算法中，会去修改各自的指针，也就不会有线程安全问题
+        // 将头节点指向将要被消费的节点，然后设置其为新的dummy node，并将其中的存储
+        // 的元素值返回
         head = first;
         E x = first.item;
         first.item = null;
@@ -287,9 +286,6 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         if (capacity <= 0) throw new IllegalArgumentException();
         this.capacity = capacity;
         // 初始化设置头、尾节点指向一个"dummy node"
-        // 注：在本阻塞队列算法中，使用了不同的互斥锁来保护生产、消费动作。该"dummy node"可以
-        // 让线程安全简单化：当队列中存在一个以上的节点，|head|和|last|指向就不可能相同，而生
-        // 产、消费算法中，会去修改各自的指针，也就不会有线程安全问题
         last = head = new Node<E>(null);
     }
 
@@ -413,8 +409,8 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
      * @throws InterruptedException {@inheritDoc}
      * @throws NullPointerException {@inheritDoc}
      */
-    // 阻塞生产一个元素。除非中断、或者阻塞|timeout|时长后队列仍然是满的，否则方法会阻塞直到能生产一个元素为止
-    // 如果队列已满，阻塞等待|timeout|时长，若仍然是满的，则返回false
+    // 阻塞生产一个元素。除非中断、或者阻塞|timeout|时长后队列仍然是满的，否则方法会阻塞直到能生产
+    // 一个元素为止。如果队列已满，阻塞等待|timeout|时长，若仍然是满的，则返回false
     public boolean offer(E e, long timeout, TimeUnit unit)
         throws InterruptedException {
 
@@ -432,7 +428,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
             while (count.get() == capacity) {
                 if (nanos <= 0)
                     return false;   // 阻塞|timeout|时长后队列仍然是满的，返回false
-                nanos = notFull.awaitNanos(nanos);  // 阻塞，直到"非满"通知的到来、或者超时返回
+                nanos = notFull.awaitNanos(nanos);  // 阻塞，直到"非满"通知、或者超时返回
             }
             enqueue(new Node<E>(e));
             c = count.getAndIncrement();
@@ -864,7 +860,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
                 if (i > 0) {
                     // assert h.item == null;
                     head = h;
-                    signalNotFull = (count.getAndAdd(-i) == capacity);  // 判断消费前队列是否为"满队列"
+                    signalNotFull = (count.getAndAdd(-i) == capacity);  // 判断消费前是否为"满"队列
                 }
             }
         } finally {

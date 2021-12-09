@@ -81,13 +81,13 @@ import java.util.Spliterators;
  * @author Doug Lea and Bill Scherer and Michael Scott
  * @param <E> the type of elements held in this collection
  */
-// 同步阻塞队列，每一次put操作，必须等待其他线性的take操作，反之亦然；队列不存储任何元素，也就没有容
-// 量概念。对应的|peek,contains,clear...|等方法是无效的。队列有公平(TransferQueue FIFO)与非
-// 公平(TransferStack LIFO 默认)两种策略模式
-// 注：在多线程场景中，我们可以同时添加多个生产者或者消费者节点（队列中只能有一个类型的节点）到队列
-// 中；不过最终，消费者和生产者依然还是需要一一匹配消耗（一个生产者数据被一个消费者捕获消费）
-// 注：如果你想到了GOLANG中的|chan|机制就对了！他们工作模式、使用场景都很相似。不过GOLANG中还可指定
-// 数据投递转移（线程间同步）的并发个数，而|SynchronousQueue|只有一个，类似"停等"模式
+// 同步阻塞队列，每一次put操作，必须等待其他线性的take操作，反之亦然；队列不存储任何元素，也就
+// 没有容量概念，对应的|peek,contains,clear...|等方法是无效的
+// 注1：队列有公平(TransferQueue)与非公平(TransferStack，默认)两种模式。详细看相应的注释
+// 注2：在多线程场景中，我们可以添加多个生产者或者消费者节点到队列中（任意时刻，队列中只能有一个
+// 类型的节点）；不过最终，消费者和生产者依然还是需要一一匹配消耗（一个生产者被一个消费者消费）
+// 注3：如果你想到了GOLANG中的|chan|机制就对了！他们工作模式、使用场景都很相似。不过GOLANG中
+// 还可指定数据投递转移（线程间同步）的并发个数，而|SynchronousQueue|只有一个，类似"停等"模式
 public class SynchronousQueue<E> extends AbstractQueue<E>
     implements BlockingQueue<E>, java.io.Serializable {
     private static final long serialVersionUID = -3223113410248163686L;
@@ -217,11 +217,13 @@ public class SynchronousQueue<E> extends AbstractQueue<E>
     static final long spinForTimeoutThreshold = 1000L;
 
     /** Dual stack */
-    // 注：一个LIFO队列，头部生产新增（头插），头部匹配消耗
-    // 精华：不同于|TransferQueue|队列中的"匹配消耗"算法，|TransferStack|采用了两个相邻
-    // 的不同类型的节点相互抵消法，来进行生产者与消费者的一一匹配。这使得匹配算法很非常灵活，甚
-    // 至可以让另一个线程辅助执行匹配算法。当然主要还是：在栈上设计这样一个匹配算法较为方便
-    // 精华：将一个节点的|match|字段指向前驱|FULFILLING|类型的节点，表示该节点被匹配
+    // 非公平模式底层的队列。一个LIFO队列，头部生产新增（头插），头部匹配消耗。其"非公平"说的
+    // 是，每一个新的消费者都会"加塞"尝试获取资源（匹配消耗），而不管是否存在其他等待者
+    // 亮点：不同于|TransferQueue|队列中的"匹配消耗"算法，|TransferStack|采用了两个相邻
+    // 的不同类型的节点相互抵消法，来进行生产者与消费者的一一匹配
+    // 说明：这样设计，可使得匹配算法非常灵活，甚至可以让一个线程生产，另一个线程辅助匹配。并且
+    // 在栈上设计这样一个匹配算法也较为方便
+    // 注：将一个节点的|match|字段指向前驱|FULFILLING|类型的节点，表示该节点被匹配
     static final class TransferStack<E> extends Transferer<E> {
         /*
          * This extends Scherer-Scott dual stack algorithm, differing,
@@ -343,11 +345,11 @@ public class SynchronousQueue<E> extends AbstractQueue<E>
          * Puts or takes an item.
          */
         // 同步的生产或消费一个元素。即，每一次|put|操作，必须等待其他线程的|take|操作，反之亦然
-        // 典型场景：先添加一个消费者，在超时时间前，添加一个生产者（任务）就会被该消费者"匹配消耗"
-        // 注：默认的|offer,poll|方法，调用|transfer|时，其中|timed==true&&nanos==0|，两
+        // 场景：先添加一个消费者，在超时时间前，添加一个生产者（任务）就会被该消费者"匹配消耗"
+        // 注1：默认的|offer,poll|方法，调用|transfer|时，其中|timed==true&&nanos==0|，两
         // 者都会立即返回，若配对使用，意义不大。必须有一个消费者在阻塞等待一个生产者，反之亦然
-        // 注：将当前节点的|match|字段指向自身，以表明该节点已被取消、待删除
-        // 注：将当前节点的|match|字段指向相邻的|FULFILLING|前驱节点，以表明该节点已被匹配
+        // 注2：将当前节点的|match|字段指向自身，以表明该节点已被取消、待删除
+        // 注3：将当前节点的|match|字段指向相邻的|FULFILLING|前驱节点，以表明该节点已被匹配
         @SuppressWarnings("unchecked")
         E transfer(E e, boolean timed, long nanos) {
             /*
@@ -375,7 +377,7 @@ public class SynchronousQueue<E> extends AbstractQueue<E>
             int mode = (e == null) ? REQUEST : DATA;
 
             // 同步的生产或消费一个元素。即，每一次|put|操作，必须等待其他线程的|take|操作，反之亦然
-            // 典型场景：先添加一个消费者，在超时时间前，添加一个生产者（任务）就会被该消费者"匹配消耗"
+            // 场景：先添加一个消费者，在超时时间前，添加一个生产者（任务）就会被该消费者"匹配消耗"
             for (;;) {
                 SNode h = head;
 
@@ -385,8 +387,8 @@ public class SynchronousQueue<E> extends AbstractQueue<E>
                 if (h == null || h.mode == mode) {  // empty or same-mode
                     if (timed && nanos <= 0) {      // can't wait
                         // 若使用了超时特性，但|nanos|时限已到，立即返回null
-                        // 注：默认的|offer(), poll()|方法，|timed==true&&nanos==0|，都会立即返回，配对使用意义不大
-                        // 必须至少有一个消费者在阻塞等待一个生产者，反之亦可
+                        // 注：默认的|offer(), poll()|方法，|timed==true&&nanos==0|，都会立即返
+                        // 回，配对使用意义不大，必须至少有一个消费者在阻塞等待一个生产者，反之亦可
                         if (h != null && h.isCancelled())   // 其他线程修改了头节点，后又被取消了
                             casHead(h, h.next);     // pop cancelled node
                         else
@@ -604,9 +606,13 @@ public class SynchronousQueue<E> extends AbstractQueue<E>
     }
 
     /** Dual Queue */
-    // 注：一个FIFO队列，尾部生产新增，头部匹配消耗
-    // 精华：将一个节点的|next|字段指向自身，表明该节点被匹配
-    // 精华：头引用始终指向一个dummy node节点（元素是null），它可以非常巧妙的实现线程安全
+    // 公平模式底层的队列。一个FIFO队列，尾部生产新增，头部匹配消耗
+    // 注：将一个节点的|next|字段指向自身，表明该节点被匹配
+    // 亮点：头引用始终指向一个dummy node节点（元素是null），它可以非常巧妙的实现线程安全
+    // 说明：引入dummy node可以让线程安全简单化：当队列中存在一个以上的节点，|head|和|last|的
+    // 指向就不可能相同。在头删、尾插算法中，会去修改各自的节点，也就不会有线程安全问题；如不设
+    // dummy node，当队列中不存在或只有一个节点，|head|和|last|的值相同，需要区别处理，且要
+    // 引入同步
     static final class TransferQueue<E> extends Transferer<E> {
         /*
          * This extends Scherer-Scott dual queue algorithm, differing,
@@ -681,8 +687,6 @@ public class SynchronousQueue<E> extends AbstractQueue<E>
 
         /** Head of queue */
         // 头引用指向的节点中的元素始终指向null，是一个"dummy node"
-        // 注：该"dummy node"可以让线程安全简单化：当队列中存在一个以上的节点，|head|和|tail|指向
-        // 就不可能相同，而生产、消费算法中，会去修改各自的指针，也就不会有线程安全问题
         transient volatile QNode head;
         /** Tail of queue */
         transient volatile QNode tail;
@@ -695,8 +699,6 @@ public class SynchronousQueue<E> extends AbstractQueue<E>
 
         TransferQueue() {
             // 初始化设置头、尾节点指向一个"dummy node"
-            // 注：该"dummy node"可以让线程安全简单化：当队列中存在一个以上的节点，|head|和|tail|指向
-            // 就不可能相同，而生产、消费算法中，会去修改各自的指针，也就不会有线程安全问题
             QNode h = new QNode(null, false); // initialize to dummy node.
             head = h;
             tail = h;
@@ -735,7 +737,7 @@ public class SynchronousQueue<E> extends AbstractQueue<E>
          * Puts or takes an item.
          */
         // 同步的生产或消费一个元素。即，每一次|put|操作，必须等待其他线程的|take|操作，反之亦然
-        // 典型场景：先添加一个消费者，在超时时间前，添加一个生产者（任务）就会被该消费者"匹配消耗"
+        // 场景：先添加一个消费者，在超时时间前，添加一个生产者（任务）就会被该消费者"匹配消耗"
         // 注：默认的|offer,poll|方法，调用|transfer|时，其中|timed==true&&nanos==0|，两
         // 者都会立即返回，若配对使用，意义不大。必须有一个消费者在阻塞等待一个生产者，反之亦然
         // 注：将当前节点的|item|字段指向自身，以表明该节点已被取消、待删除

@@ -264,6 +264,10 @@ import java.util.stream.Stream;
  * @param <K> the type of keys maintained by this map
  * @param <V> the type of mapped values
  */
+// 存储 k-v 键值对的无序映射表。它是HashMap的一个线程安全的、支持高效并发的版本
+// 亮点：采用分段锁的设计，可使哈希表在更新时，使用更细粒度的锁；采用计数器数组的设计，可使统计元素
+// 个数的字段成为新的"热点域"问题（最初的"热点域"哈希表字段，已经使用分段锁解决）
+// 注：计数器数组的长度被限制在不得大于CPU数目最小的2指数倍。比如6核CPU，数组长度最大为8。最小为2
 public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     implements ConcurrentMap<K,V>, Serializable {
     private static final long serialVersionUID = 7249069246763182397L;
@@ -551,7 +555,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * tree removal about conversion back to plain bins upon
      * shrinkage.
      */
-    // 当某个桶中的冲突元素大于等于 8，链表将被转化成红黑树；当个数小于等于 6 时，树结构还原成链表
+    // 当某个桶中的冲突元素大于等于8，链表将被转化成红黑树；当个数小于等于6时，树结构还原成链表
     // 依据泊松分布：加载因子为0.75的时候，链表中的个数为8的可能性为亿分之6（代码中注释所描述），所以正常情况下
     // 是不会出现这种状况的，但是如果出现了就说明是非正常情况，这个时候可能有很多的key碰撞在同一个桶中，这个时候继续
     // 用链表的话查询时间复杂度O(n)效率是很低的，而红黑树的O(log(n))则要远远优于链表
@@ -832,11 +836,14 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     /**
      * Spinlock (locked via CAS) used when resizing and/or creating CounterCells.
      */
+    // 更新并发计数器数组的"锁"
     private transient volatile int cellsBusy;
 
     /**
      * Table of counter cells. When non-null, size is a power of 2.
      */
+    // 并发计数器数组
+    // 注：设计并发计数器数组，主要是为了解决元素个数"热点域"问题：所有的更新都要更新计数器
     private transient volatile CounterCell[] counterCells;
 
     // views
@@ -1117,6 +1124,8 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                 }
             }
         }
+
+        // 更新计数器
         addCount(1L, binCount);
         return null;
     }
@@ -2276,7 +2285,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
         // 循环、无锁（原子CAS操作）进行初始化哈希表
         while ((tab = table) == null || tab.length == 0) {
             if ((sc = sizeCtl) < 0)
-                // 其他线程正在初始化，该竞争线程会在这个while中空转，直到初始化完成返回
+                // 其他线程正在初始化，当前竞争线程会在这个while中空转，直到初始化完成返回
                 // 注：为了不过度空跑CPU，此处会主动放弃CPU时间片
                 Thread.yield(); // lost initialization race; just spin
             else if (U.compareAndSwapInt(this, SIZECTL, sc, -1)) {  // 设置-1状态后，执行初始化
@@ -2315,18 +2324,17 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     // 当|CounterCell|被初始化了，就优先使用他，不再使用|baseCount|
     // 2.检查是否需要扩容，或者是否正在扩容。如果需要扩容，就调用扩容方法，如果正在扩容，就辅助其扩容
     // 注：第一次调用扩容方法前，|sizeCtl|的低16位是加2的，不是加1。所以|sc==rs+1|的判断是表示
-    // 是否完成任务了。因为完成扩容后 |sizeCtl==rs+1|
-    // 3.扩容线程最大数量是65535，是由于低16位的位数限制
+    // 是否完成任务了。因为完成扩容后|sizeCtl==rs+1|
+    // 注：扩容线程最大数量是65535，是由于低16位的位数限制
     private final void addCount(long x, int check) {
         CounterCell[] as; long b, s;
-        // 如果计数盒子不是空或者如果增加|baseCount|计数器失败（并发增加）
+        // 如果并发计数器不是空、或者如果增加|baseCount|计数器失败（说明增加操作出现了并发）
         if ((as = counterCells) != null ||
             !U.compareAndSwapLong(this, BASECOUNT, b = baseCount, s = b + x)) {
             CounterCell a; long v; int m;
             boolean uncontended = true;
-            // 如果计数盒子是空（尚未出现并发）
-            // 如果随机取余一个数组位置为空或者修改这个槽位的变量失败（出现并发了）
-            // 执行 fullAddCount 方法，并结束
+            // 如果并发计数器尚未初始化、或者如果随机的并发计数器桶尚未初始化、或者增加这个
+            // 并发计数器桶的数量字段失败（说明出现并发了），执行完整并发计数器增加方法，并直接返回
             if (as == null || (m = as.length - 1) < 0 ||
                 (a = as[ThreadLocalRandom.getProbe() & m]) == null ||
                 !(uncontended =
@@ -2338,6 +2346,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                 return;
             s = sumCount();
         }
+
         if (check >= 0) {
             Node<K,V>[] tab, nt; int n, sc;
             // 如果元素个数大于扩容阈值|sizeCtl|，且|table|不是空、且|table|的长度小于1<<30，执行扩容
@@ -2613,6 +2622,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     final long sumCount() {
         CounterCell[] as = counterCells; CounterCell a;
         long sum = baseCount;
+        // 存在并发的计数器数组
         if (as != null) {
             for (int i = 0; i < as.length; ++i) {
                 if ((a = as[i]) != null)
@@ -2623,28 +2633,39 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     }
 
     // See LongAdder version for explanation
+    // 完整的并发计数器增加计数方法
     private final void fullAddCount(long x, boolean wasUncontended) {
         int h;
+        // 探针|h|的作用是哈希线程，使线程和数组中的元素不用对应起来，尽量避免线程争用同一数组元素
+        // 注：探针哈希值和map里使用的哈希值的区别是，当线程发生数组元素争用后，可以改变线程的探针哈
+        // 希值，让线程去使用另一个数组元素
         if ((h = ThreadLocalRandom.getProbe()) == 0) {
+            // 初始化当前线程的|threadLocalRandomProbe|字段
             ThreadLocalRandom.localInit();      // force initialization
             h = ThreadLocalRandom.getProbe();
+
+            // 当此标志位为|false|时，说明原始探针值映射的计数器桶，之前的更新动作出现了并发
+            // 此处重置了探针|h|值，所以将其值为无需重新获取探针
             wasUncontended = true;
         }
+
+        // 当此标志位为|false|时，更新计数器失败，需重新获取探针；当此标志位为|true|时，更新计数器失败，需扩容
         boolean collide = false;                // True if last slot nonempty
         for (;;) {
             CounterCell[] as; CounterCell a; int n; long v;
-            if ((as = counterCells) != null && (n = as.length) > 0) {
-                if ((a = as[(n - 1) & h]) == null) {
+            if ((as = counterCells) != null && (n = as.length) > 0) {   // 并发计数器已初始化
+                if ((a = as[(n - 1) & h]) == null) {    // 映射的计数器桶元素尚未初始化
                     if (cellsBusy == 0) {            // Try to attach new Cell
+                        // 创建计数器对象，其中数量为|x|
                         CounterCell r = new CounterCell(x); // Optimistic create
                         if (cellsBusy == 0 &&
-                            U.compareAndSwapInt(this, CELLSBUSY, 0, 1)) {
+                            U.compareAndSwapInt(this, CELLSBUSY, 0, 1)) {   // 获取并发计数器的更新权
                             boolean created = false;
                             try {               // Recheck under lock
                                 CounterCell[] rs; int m, j;
                                 if ((rs = counterCells) != null &&
                                     (m = rs.length) > 0 &&
-                                    rs[j = (m - 1) & h] == null) {
+                                    rs[j = (m - 1) & h] == null) {  // 重新检查是否初始化
                                     rs[j] = r;
                                     created = true;
                                 }
@@ -2653,24 +2674,35 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                             }
                             if (created)
                                 break;
+
+                            // 映射的计数器桶元素已被其他线程初始化
                             continue;           // Slot is now non-empty
                         }
                     }
+
+                    // 重置碰撞标志位
                     collide = false;
                 }
                 else if (!wasUncontended)       // CAS already known to fail
+                    // 当此标志位为|false|时，说明原始探针值映射的计数器桶，之前的更新动作出现了并发。需要立即重新获取探针值
+                    // 此处，将其重置为|true|，以表示本次循环重新获取探针值之后，无需再重新获取探针值
                     wasUncontended = true;      // Continue after rehash
-                else if (U.compareAndSwapLong(a, CELLVALUE, v = a.value, v + x))
+                else if (U.compareAndSwapLong(a, CELLVALUE, v = a.value, v + x))    // 增加计数器中的值
                     break;
                 else if (counterCells != as || n >= NCPU)
+                    // 当此标志位为|false|时，更新计数器失败，需重新获取探针；当此标志位为|true|时，更新计数器失败，需扩容
+                    // 此处设置为|false|，是因为外部已经扩容该计数器；或者计数器的长度已经超过了核心数，也无需再扩容计数器了
                     collide = false;            // At max size or stale
                 else if (!collide)
+                    // 当此标志位为|false|时，更新计数器失败，需重新获取探针；当此标志位为|true|时，更新计数器失败，需扩容
                     collide = true;
                 else if (cellsBusy == 0 &&
-                         U.compareAndSwapInt(this, CELLSBUSY, 0, 1)) {
+                         U.compareAndSwapInt(this, CELLSBUSY, 0, 1)) {  // 获取并发计数器的更新权
                     try {
+                        // 扩容并发计数器为原始容量的2倍
                         if (counterCells == as) {// Expand table unless stale
                             CounterCell[] rs = new CounterCell[n << 1];
+                            // 迁移原始计数器对象
                             for (int i = 0; i < n; ++i)
                                 rs[i] = as[i];
                             counterCells = rs;
@@ -2678,16 +2710,23 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                     } finally {
                         cellsBusy = 0;
                     }
+
+                    // 重置碰撞标志位
                     collide = false;
+
+                    // 直接重试，无需重新获取探针哈希值。因为此时已扩容，rehash的桶基本上也不会相同
                     continue;                   // Retry with expanded table
                 }
+                // 当发生线程争用后（CAS更新计数器失败，说明出现了并发），更改当前线程的探针哈希值
                 h = ThreadLocalRandom.advanceProbe(h);
             }
             else if (cellsBusy == 0 && counterCells == as &&
-                     U.compareAndSwapInt(this, CELLSBUSY, 0, 1)) {
+                     U.compareAndSwapInt(this, CELLSBUSY, 0, 1)) {  // 获取并发计数器的更新权
+                // 初始化并发计数器
                 boolean init = false;
                 try {                           // Initialize table
                     if (counterCells == as) {
+                        // 初始化并发计数器、并随机初始化其中一个桶，其计数器中的值为|x|
                         CounterCell[] rs = new CounterCell[2];
                         rs[h & 1] = new CounterCell(x);
                         counterCells = rs;
