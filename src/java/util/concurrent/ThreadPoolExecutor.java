@@ -317,7 +317,7 @@ import java.util.*;
  * @author Doug Lea
  */
 // 底层线程池实现
-// 精华：每个工作线程Worker对象使用一个|state|来表示线程忙闲状态；使用中断机制控制工作线程/线程池
+// 亮点：每个工作线程Worker对象使用一个|state|来表示线程忙闲状态；使用中断机制控制工作线程/线程池
 // 的退出；使用阻塞队列的|poll()|限时接口，实现工作线程最大空闲时间限制的特性
 public class ThreadPoolExecutor extends AbstractExecutorService {
     /**

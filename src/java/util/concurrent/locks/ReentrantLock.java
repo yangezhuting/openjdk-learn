@@ -177,6 +177,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
             return getExclusiveOwnerThread() == Thread.currentThread();
         }
 
+        // 注：|ConditionObject|必须是|ReentrantLock|非静态的内部类，以使它持有父类的资源
         final ConditionObject newCondition() {
             return new ConditionObject();
         }

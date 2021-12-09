@@ -1895,6 +1895,7 @@ public abstract class AbstractQueuedSynchronizer
      * @return true if cancelled before the node was signalled
      */
     final boolean transferAfterCancelledWait(Node node) {
+        // 删除该等待节点
         if (compareAndSetWaitStatus(node, Node.CONDITION, 0)) {
             enq(node);
             return true;
@@ -2045,13 +2046,20 @@ public abstract class AbstractQueuedSynchronizer
          * Adds a new waiter to wait queue.
          * @return its new wait node
          */
+        // 尾插法添加一个"条件变量"类型等待节点
+        // 注：此方法是非线程安全的。因为有权执行此方法的线程，必须是已经持有了独占锁
         private Node addConditionWaiter() {
             Node t = lastWaiter;
+
             // If lastWaiter is cancelled, clean out.
+            // 删除尾部节点已被取消
             if (t != null && t.waitStatus != Node.CONDITION) {
+                // 删除队列中所有以被取消的节点
                 unlinkCancelledWaiters();
                 t = lastWaiter;
             }
+
+            // 添加一个"条件变量"类型等待节点，其关联当前线程
             Node node = new Node(Thread.currentThread(), Node.CONDITION);
             if (t == null)
                 firstWaiter = node;
@@ -2069,6 +2077,7 @@ public abstract class AbstractQueuedSynchronizer
          */
         private void doSignal(Node first) {
             do {
+                // 删除即将被唤醒的第一个节点
                 if ( (firstWaiter = first.nextWaiter) == null)
                     lastWaiter = null;
                 first.nextWaiter = null;
@@ -2082,6 +2091,7 @@ public abstract class AbstractQueuedSynchronizer
          */
         private void doSignalAll(Node first) {
             lastWaiter = firstWaiter = null;
+            // 遍历唤醒所有等待节点
             do {
                 Node next = first.nextWaiter;
                 first.nextWaiter = null;
@@ -2104,21 +2114,28 @@ public abstract class AbstractQueuedSynchronizer
          * without requiring many re-traversals during cancellation
          * storms.
          */
+        // 删除队列中所有已被取消的节点
         private void unlinkCancelledWaiters() {
             Node t = firstWaiter;
-            Node trail = null;
+            Node trail = null;  // 最近遍历过程中，最后一个未被取消的节点
+
+            // 等待链表不为空，遍历删除所有被取消的节点
             while (t != null) {
                 Node next = t.nextWaiter;
-                if (t.waitStatus != Node.CONDITION) {
+                if (t.waitStatus != Node.CONDITION) {   // 节点被取消
                     t.nextWaiter = null;
                     if (trail == null)
                         firstWaiter = next;
                     else
+                        // 最近遍历过程中，最后一个未被取消的节点，将其后驱指针设置到next，以删除被取消的节点
                         trail.nextWaiter = next;
+
+                    // 遍历到链表尾部
                     if (next == null)
                         lastWaiter = trail;
                 }
                 else
+                    // 最近遍历过程中，最后一个未被取消的节点
                     trail = t;
                 t = next;
             }
@@ -2134,9 +2151,15 @@ public abstract class AbstractQueuedSynchronizer
          * @throws IllegalMonitorStateException if {@link #isHeldExclusively}
          *         returns {@code false}
          */
+        // 唤醒第一个等待者
+        // 注：该方法是非线程安全的，但有权执行此方法的线程，必须已经提前持有了独占锁，否则会抛出异常
         public final void signal() {
+            // 检查当前锁的持有者：解锁和持有者线程必须是相同的。这也是独占模式的语义
+            // 注：这也意味着，在调用|signal()|之前，必须调用|lock()|获取锁
             if (!isHeldExclusively())
                 throw new IllegalMonitorStateException();
+
+            // 唤醒第一个等待者
             Node first = firstWaiter;
             if (first != null)
                 doSignal(first);
@@ -2149,9 +2172,15 @@ public abstract class AbstractQueuedSynchronizer
          * @throws IllegalMonitorStateException if {@link #isHeldExclusively}
          *         returns {@code false}
          */
+        // 唤醒所有等待者
+        // 注：该方法是非线程安全的，但有权执行此方法的线程，必须已经提前持有了独占锁，否则会抛出异常
         public final void signalAll() {
+            // 检查当前锁的持有者：解锁和持有者线程必须是相同的。这也是独占模式的语义
+            // 注：这也意味着，在调用|signalAll()|之前，必须调用|lock()|获取锁
             if (!isHeldExclusively())
                 throw new IllegalMonitorStateException();
+
+            // 唤醒所有等待者
             Node first = firstWaiter;
             if (first != null)
                 doSignalAll(first);
@@ -2229,21 +2258,43 @@ public abstract class AbstractQueuedSynchronizer
          * <li> If interrupted while blocked in step 4, throw InterruptedException.
          * </ol>
          */
+        // 挂起当前线程，直到被另一个线程主动唤醒；或者被另一个线程中断
+        // 注：该方法是非线程安全的，但有权执行此方法的线程，必须已经提前持有了独占锁，否则会抛出异常
         public final void await() throws InterruptedException {
+            // 当前线程是否已经被中断
             if (Thread.interrupted())
                 throw new InterruptedException();
+
+            // 尾插法添加一个"条件比变量"类型等待节点
             Node node = addConditionWaiter();
+
+            // 暂时释放资源（互斥锁），让唤醒的线程有机会重新获得资源（互斥锁）
+            // 注：当前线程必须已经提前持有了独占锁，否则会抛出异常
             int savedState = fullyRelease(node);
+
             int interruptMode = 0;
+            // 节点为合法的"条件变量"类型的等待节点。即，未被删除、未被取消，就挂起当前线程
             while (!isOnSyncQueue(node)) {
+                // 挂起当前线程，直到被唤醒
                 LockSupport.park(this);
+
+                // 唤醒后，检查是否是中断唤醒，否则说明线程是合法被唤醒的，移除该等待节点即可
+                // 注：当前线程被唤醒条件：1.其他线程主动唤醒；2.当前线程被中断
                 if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
                     break;
             }
+
+            // 若唤醒的节点是第一个等待节点（前驱是头节点），恢复（获取）所有资源（互斥锁）
+            // 注：若|acquireQueued|返回true，则说明当前线程等待过程中被中断过
             if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
                 interruptMode = REINTERRUPT;
+
+            // 被唤醒的节点必定是第一个等待节点，否则之前一步|acquireQueued|就会挂起当前线程
             if (node.nextWaiter != null) // clean up if cancelled
+                // 如果有更多等待节点，尝试删除队列中所有已被取消的节点
                 unlinkCancelledWaiters();
+
+            // 恢复唤醒线程的中断状态
             if (interruptMode != 0)
                 reportInterruptAfterWait(interruptMode);
         }

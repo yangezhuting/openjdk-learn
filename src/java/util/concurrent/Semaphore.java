@@ -176,20 +176,27 @@ public class Semaphore implements java.io.Serializable {
 
         final int nonfairTryAcquireShared(int acquires) {
             for (;;) {
+                // 直接尝试获取资源，而不管等待队列中是否有节点
                 int available = getState();
                 int remaining = available - acquires;
+                // 当剩余资源不足时，返回获取一个负数，表示失败，使线程挂起等待
+                // 注：此处表达式是非线程安全的，可能会出现其他线程已经释放了资源，但此处还是返回了资源不足，导
+                // 致线程被挂起！但这不是一个非常严重的后果
                 if (remaining < 0 ||
                     compareAndSetState(available, remaining))
                     return remaining;
             }
         }
 
+        // 共享方式，尝试释放资源。释放成功返回true，失败返回false
         protected final boolean tryReleaseShared(int releases) {
             for (;;) {
                 int current = getState();
                 int next = current + releases;
                 if (next < current) // overflow
                     throw new Error("Maximum permit count exceeded");
+
+                // CAS重置资源计数
                 if (compareAndSetState(current, next))
                     return true;
             }
@@ -225,6 +232,7 @@ public class Semaphore implements java.io.Serializable {
             super(permits);
         }
 
+        // 非公平释放共享资源
         protected int tryAcquireShared(int acquires) {
             return nonfairTryAcquireShared(acquires);
         }
@@ -242,10 +250,16 @@ public class Semaphore implements java.io.Serializable {
 
         protected int tryAcquireShared(int acquires) {
             for (;;) {
+                // 如果当前线程不是等待队列中第一个节点（前驱是头节点），立即返回资源不足，使其挂起
+                // 注：公平模式，不允许插队
                 if (hasQueuedPredecessors())
                     return -1;
                 int available = getState();
                 int remaining = available - acquires;
+
+                // 当剩余资源不足时，返回获取一个负数，表示失败，使线程挂起等待
+                // 注：此处表达式是非线程安全的，可能会出现其他线程已经释放了资源，但此处还是返回了资源不足，导
+                // 致线程被挂起！但这不是一个非常严重的后果
                 if (remaining < 0 ||
                     compareAndSetState(available, remaining))
                     return remaining;
