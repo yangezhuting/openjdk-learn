@@ -81,6 +81,13 @@ import java.util.function.Supplier;
 // 再次操作线程私有变量（不管是set、get），都可能会触发哈希表过时数据的清理，解决内存泄漏
 // 亮点：在添加、更新、甚至是查找一个线程私有变量时，都有可能会触发当前线程对哈希表对过时条目
 // 的清理算法。算法中扫描规则多样，特别是启发式扫描，兼顾内存与性能
+//
+// 注：线程私有变量在有些场景下存在"内存泄露"问题。比如以线程复用为主的线程池场景中，一个线程
+// 的寿命很长，大对象长期不被回收，可能会影响系统运行效率与安全。所以在使用线程私有变量时，我
+// 们应该要养成操作完后就立即删除它的习惯，并且最好在将线程返回到线程池之前，用|remove()|进
+// 行删除。 注：如果线程用完即销毁，是不会有内存泄露问题
+//
+// 注：同一个线程私有变量在父线程中设置后，在子线程中是获取不到的。|InheritableThreadLocal|
 public class ThreadLocal<T> {
     /**
      * ThreadLocals rely on per-thread linear-probe hash maps attached
@@ -176,15 +183,15 @@ public class ThreadLocal<T> {
      * @return the current thread's value of this thread-local
      */
     public T get() {
-        Thread t = Thread.currentThread();
-
         // 获取当前线程的线程私有变量哈希表
+        Thread t = Thread.currentThread();
         ThreadLocalMap map = getMap(t);
+
         if (map != null) {
-            // 获取当前线程私有变量对应的键值对
+            // 获取当前线程私有变量对应的键值对实体
             ThreadLocalMap.Entry e = map.getEntry(this);
 
-            // 找到线程私有变量，返回其中的值
+            // 找到线程私有变量实体，返回其中的值
             if (e != null) {
                 @SuppressWarnings("unchecked")
                 T result = (T)e.value;
@@ -192,7 +199,7 @@ public class ThreadLocal<T> {
             }
         }
 
-        // 调用用户提供的线程私有变量的初始化值，并将其添加值哈希表中
+        // 调用用户提供的线程私有变量的初始化方法，并将私有变量键值对实体添加值哈希表中
         return setInitialValue();
     }
 
@@ -202,12 +209,14 @@ public class ThreadLocal<T> {
      *
      * @return the initial value
      */
-    // 自动调用线程私有变量的值初始化版本的|set|方法
+    // 自动调用线程私有变量的初始化值方法版本的|set()|方法
     private T setInitialValue() {
-        // 调用线程私有变量的值初始化方法。通常情况下，用户会重写该方法
+        // 调用线程私有变量的初始化值的方法
+        // 注：通常情况下，用户会重写该方法；或者若用户使用|withInitial()|返回的对象，调
+        // 用线程私有变量的设置方法，就会自动调用用户提供的初始化方法
         T value = initialValue();
 
-        // 以下逻辑同|set|方法
+        // 以下逻辑同|set()|方法
         Thread t = Thread.currentThread();
         ThreadLocalMap map = getMap(t);
         if (map != null)
@@ -232,10 +241,10 @@ public class ThreadLocal<T> {
         ThreadLocalMap map = getMap(t);
 
         if (map != null)
-            // 添加、更新一个线程私有变量和值的键值对到哈希表中
+            // 添加、更新一个线程私有变量和值的键值对实体到哈希表中
             map.set(this, value);
         else
-            // 初始化当前线程用于存放私有变量的哈希表，并添加当前私有变量键值对
+            // 初始化当前线程用于存放私有变量的哈希表，并添加当前私有变量的键值对实体
             createMap(t, value);
     }
 
@@ -250,7 +259,7 @@ public class ThreadLocal<T> {
      *
      * @since 1.5
      */
-    // 手动从当前线程的线程私有变量哈希表中，清除当前线程私有变量的条目
+    // 手动从当前线程的线程私有变量哈希表中，清除当前线程私有变量和值的键值对实体
     public void remove() {
          ThreadLocalMap m = getMap(Thread.currentThread());
          if (m != null)
@@ -287,6 +296,9 @@ public class ThreadLocal<T> {
      * @param  parentMap the map associated with parent thread
      * @return a map containing the parent's inheritable bindings
      */
+    // 在|Thread.init()|方法中，会将父线程中不为|null|的|inheritableThreadLocal|属性作
+    // 为|createInheritedMap()|参数，创建一个线程私有变量哈希表，将其赋值给子线程|inheritableThreadLocal|
+    // 有了它，我们就可以递归的访问父线程的私有变量了
     static ThreadLocalMap createInheritedMap(ThreadLocalMap parentMap) {
         return new ThreadLocalMap(parentMap);
     }
@@ -307,6 +319,7 @@ public class ThreadLocal<T> {
      * An extension of ThreadLocal that obtains its initial value from
      * the specified {@code Supplier}.
      */
+    // 一个带有初始化线程私有变量对象方法的线程私有变量对象
     static final class SuppliedThreadLocal<T> extends ThreadLocal<T> {
 
         private final Supplier<? extends T> supplier;
@@ -361,6 +374,7 @@ public class ThreadLocal<T> {
          * The table, resized as necessary.
          * table.length MUST always be a power of two.
          */
+        // 哈希表
         private Entry[] table;
 
         /**
@@ -421,12 +435,14 @@ public class ThreadLocal<T> {
          *
          * @param parentMap the map associated with parent thread.
          */
+        // 遍历拷贝父线程中的线程私有变量哈希表
         private ThreadLocalMap(ThreadLocalMap parentMap) {
             Entry[] parentTable = parentMap.table;
             int len = parentTable.length;
             setThreshold(len);
             table = new Entry[len];
 
+            // 遍历拷贝父线程中的线程私有变量哈希表
             for (int j = 0; j < len; j++) {
                 Entry e = parentTable[j];
                 if (e != null) {

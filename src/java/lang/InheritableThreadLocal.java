@@ -45,6 +45,10 @@ import java.lang.ref.*;
  * @since   1.2
  */
 
+// 相比|ThreadLocal|类不能提供子线程访问父线程的线程私有变量，|InheritableThreadLocal|类可以
+// 注：是怎么做到让子线程访问父线程的私有变量的？关键点就在于|Thread.init()|方法中，会将父线程中不
+// 为|null|的|inheritableThreadLocal|属性作为|createInheritedMap()|参数，创建一个线程私有
+// 变量哈希表，将其赋值给子线程|inheritableThreadLocal|。有了它，就可以递归的访问父线程私有变量了
 public class InheritableThreadLocal<T> extends ThreadLocal<T> {
     /**
      * Computes the child's initial value for this inheritable thread-local
