@@ -71,6 +71,16 @@ import java.util.function.Supplier;
  * @author  Josh Bloch and Doug Lea
  * @since   1.2
  */
+// 每个线程都会保存着一份线程私有变量的副本，任何一个线程内对该线程私有变量的操作都只是针对这
+// 个副本；也因此，它并不适用于值的更新需要对多线程可见的场景
+// 注：每个线程对象都有一个|Thread.threadLocals|属性，它保存了当前线程中所有的线程私有变
+// 量。它是一个轻量级的|HashMap|的实现（使用开放定址法解决冲突）。其中键为线程私有变量的引用，
+// 值为线程私有变量需要设置的值
+// 亮点：每个线程私有变量的键值对，会被包装成|Entry|实体，保存至|Thread.threadLocals|的
+// 哈希表里。其|Entry.key|是对|ThreadLocal|的弱引用，当线程退出时，会让|key==null|，若
+// 再次操作线程私有变量（不管是set、get），都可能会触发哈希表过时数据的清理，解决内存泄漏
+// 亮点：在添加、更新、甚至是查找一个线程私有变量时，都有可能会触发当前线程对哈希表对过时条目
+// 的清理算法。算法中扫描规则多样，特别是启发式扫描，兼顾内存与性能
 public class ThreadLocal<T> {
     /**
      * ThreadLocals rely on per-thread linear-probe hash maps attached
@@ -82,12 +92,14 @@ public class ThreadLocal<T> {
      * are used by the same threads, while remaining well-behaved in
      * less common cases.
      */
+    // 用于将一个线程私有变量、映射到、当前线程私有变量哈希表的某个桶的、哈希值
     private final int threadLocalHashCode = nextHashCode();
 
     /**
      * The next hash code to be given out. Updated atomically. Starts at
      * zero.
      */
+    // 下一个线程私有变量的哈希值。是一个类级的、静态的、原子整型
     private static AtomicInteger nextHashCode =
         new AtomicInteger();
 
@@ -96,11 +108,16 @@ public class ThreadLocal<T> {
      * implicit sequential thread-local IDs into near-optimally spread
      * multiplicative hash values for power-of-two-sized tables.
      */
+    // 每个线程私有变量生成哈希值的增量（步进、间隙）
+    // 注：这个增量主要是为了让线程私有变量生成的哈希值，能均匀的分布在2^n次方的数组里
+    // 注：这个魔数的选取与斐波那契散列法以及黄金分割有关。即：|0x61c88647=2^32*((Math.sqrt(5)-1)/2)|
+    // @see https://www.javaspecialists.eu/archive/Issue164-Why-0x61c88647.html
     private static final int HASH_INCREMENT = 0x61c88647;
 
     /**
      * Returns the next hash code.
      */
+    // 获取线程私有变量哈希值
     private static int nextHashCode() {
         return nextHashCode.getAndAdd(HASH_INCREMENT);
     }
@@ -123,6 +140,7 @@ public class ThreadLocal<T> {
      *
      * @return the initial value for this thread-local
      */
+    // 初始化线程私有变量的值的初始化方法。主要用于子类覆盖重写此方法
     protected T initialValue() {
         return null;
     }
@@ -137,6 +155,7 @@ public class ThreadLocal<T> {
      * @throws NullPointerException if the specified supplier is null
      * @since 1.8
      */
+    // 获取一个带有初始化线程私有变量对象方法的线程私有变量对象
     public static <S> ThreadLocal<S> withInitial(Supplier<? extends S> supplier) {
         return new SuppliedThreadLocal<>(supplier);
     }
@@ -158,15 +177,22 @@ public class ThreadLocal<T> {
      */
     public T get() {
         Thread t = Thread.currentThread();
+
+        // 获取当前线程的线程私有变量哈希表
         ThreadLocalMap map = getMap(t);
         if (map != null) {
+            // 获取当前线程私有变量对应的键值对
             ThreadLocalMap.Entry e = map.getEntry(this);
+
+            // 找到线程私有变量，返回其中的值
             if (e != null) {
                 @SuppressWarnings("unchecked")
                 T result = (T)e.value;
                 return result;
             }
         }
+
+        // 调用用户提供的线程私有变量的初始化值，并将其添加值哈希表中
         return setInitialValue();
     }
 
@@ -176,8 +202,12 @@ public class ThreadLocal<T> {
      *
      * @return the initial value
      */
+    // 自动调用线程私有变量的值初始化版本的|set|方法
     private T setInitialValue() {
+        // 调用线程私有变量的值初始化方法。通常情况下，用户会重写该方法
         T value = initialValue();
+
+        // 以下逻辑同|set|方法
         Thread t = Thread.currentThread();
         ThreadLocalMap map = getMap(t);
         if (map != null)
@@ -197,11 +227,15 @@ public class ThreadLocal<T> {
      *        this thread-local.
      */
     public void set(T value) {
+        // 获取当前线程的线程私有变量哈希表
         Thread t = Thread.currentThread();
         ThreadLocalMap map = getMap(t);
+
         if (map != null)
+            // 添加、更新一个线程私有变量和值的键值对到哈希表中
             map.set(this, value);
         else
+            // 初始化当前线程用于存放私有变量的哈希表，并添加当前私有变量键值对
             createMap(t, value);
     }
 
@@ -216,7 +250,8 @@ public class ThreadLocal<T> {
      *
      * @since 1.5
      */
-     public void remove() {
+    // 手动从当前线程的线程私有变量哈希表中，清除当前线程私有变量的条目
+    public void remove() {
          ThreadLocalMap m = getMap(Thread.currentThread());
          if (m != null)
              m.remove(this);
@@ -240,6 +275,7 @@ public class ThreadLocal<T> {
      * @param t the current thread
      * @param firstValue value for the initial entry of the map
      */
+    // 初始化当前线程用于存放所有私有变量的哈希表，并添加当前私有变量|t->firstValue|键值对
     void createMap(Thread t, T firstValue) {
         t.threadLocals = new ThreadLocalMap(this, firstValue);
     }
@@ -305,6 +341,7 @@ public class ThreadLocal<T> {
          * entry can be expunged from table.  Such entries are referred to
          * as "stale entries" in the code that follows.
          */
+        // 存储线程私有变量的数据结构
         static class Entry extends WeakReference<ThreadLocal<?>> {
             /** The value associated with this ThreadLocal. */
             Object value;
@@ -339,6 +376,9 @@ public class ThreadLocal<T> {
         /**
          * Set the resize threshold to maintain at worst a 2/3 load factor.
          */
+        // 哈希表清除过期条目、rehash的阈值
+        // 注：当|size>=threshold|时，每次新增、修改线程私有地变量时，会触发哈希表清除、rehash所
+        // 有过时条目。当清除后，|size>=threshold*3/4|时，将触发扩容
         private void setThreshold(int len) {
             threshold = len * 2 / 3;
         }
@@ -362,11 +402,16 @@ public class ThreadLocal<T> {
          * ThreadLocalMaps are constructed lazily, so we only create
          * one when we have at least one entry to put in it.
          */
+        // 初始化当前线程用于存放所有私有变量的哈希表，并添加当前私有变量|t->firstValue|键值对
         ThreadLocalMap(ThreadLocal<?> firstKey, Object firstValue) {
             table = new Entry[INITIAL_CAPACITY];
             int i = firstKey.threadLocalHashCode & (INITIAL_CAPACITY - 1);
+
+            // 将映射桶设置为线程私有变量和值的键值对
             table[i] = new Entry(firstKey, firstValue);
             size = 1;
+
+            // 设置扩容阈值
             setThreshold(INITIAL_CAPACITY);
         }
 
@@ -451,6 +496,7 @@ public class ThreadLocal<T> {
          * @param key the thread local object
          * @param value the value to be set
          */
+        // 添加、更新一个线程私有变量和值的键值对到哈希表中
         private void set(ThreadLocal<?> key, Object value) {
 
             // We don't use a fast path as with get() because it is at
@@ -462,24 +508,34 @@ public class ThreadLocal<T> {
             int len = tab.length;
             int i = key.threadLocalHashCode & (len-1);
 
+            // 从映射位置|i|偏移开始，遍历哈希表所有映射的槽
+            // 注：使用开放定址法解决哈希冲突
             for (Entry e = tab[i];
                  e != null;
                  e = tab[i = nextIndex(i, len)]) {
+                // 取出映射的槽中元素对应的本地变量对象引用
                 ThreadLocal<?> k = e.get();
 
+                // 若与当前线程私有变量相同（引用地址比较），则覆盖掉之前保存的值
                 if (k == key) {
                     e.value = value;
                     return;
                 }
 
+                // 若映射的槽不为空，但线程私有变量对象已经为空，说明|e|是一个过时的条目
+                // 注：从映射位置|i|偏移开始，遍历删除所有|entry.key==null|的条目，并插入新的条目
                 if (k == null) {
                     replaceStaleEntry(key, value, i);
                     return;
                 }
             }
 
+            // 将线程私有变量的键值对|key->value|存放值空槽中
             tab[i] = new Entry(key, value);
             int sz = ++size;
+
+            // 清除部分过时条目。如果没有清除任何条目，且当前线程私有变量个数超过容量的2/3，尝试清除
+            // 哈希表中所有过时条目；若当前线程私有变量个数超过容量的3/4，进行扩容
             if (!cleanSomeSlots(i, sz) && sz >= threshold)
                 rehash();
         }
@@ -487,6 +543,7 @@ public class ThreadLocal<T> {
         /**
          * Remove the entry for key.
          */
+        // 手动从当前线程的线程私有变量哈希表中，清除线程私有变量|key|的条目
         private void remove(ThreadLocal<?> key) {
             Entry[] tab = table;
             int len = tab.length;
@@ -495,7 +552,9 @@ public class ThreadLocal<T> {
                  e != null;
                  e = tab[i = nextIndex(i, len)]) {
                 if (e.get() == key) {
+                    // 手动清除线程对象的引用值
                     e.clear();
+                    // 清除该|i|位置的已过时的条目
                     expungeStaleEntry(i);
                     return;
                 }
@@ -517,6 +576,10 @@ public class ThreadLocal<T> {
          * @param  staleSlot index of the first stale entry encountered while
          *         searching for key.
          */
+        // 从位置|staleSlot|偏移开始，查找线程私有变量在哈希表中原始位置，将其更新为新的值；如果
+        // 不存在该私有变量，新的私有变量键值对将被放入|staleSlot|槽。
+        // 注：此方法还会清除部分过期条目。清除起始索引规则为：从|staleSlot|开始向前遍历，直至遇
+        // 到第一个过时条目为止的索引；若前面无过时条目，则向后遍历查找，此时就会清除全部过期条目
         private void replaceStaleEntry(ThreadLocal<?> key, Object value,
                                        int staleSlot) {
             Entry[] tab = table;
@@ -527,6 +590,7 @@ public class ThreadLocal<T> {
             // We clean out whole runs at a time to avoid continual
             // incremental rehashing due to garbage collector freeing
             // up refs in bunches (i.e., whenever the collector runs).
+            // 备份从位置|i|偏移开始的前一个过时条目索引
             int slotToExpunge = staleSlot;
             for (int i = prevIndex(staleSlot, len);
                  (e = tab[i]) != null;
@@ -536,6 +600,8 @@ public class ThreadLocal<T> {
 
             // Find either the key or trailing null slot of run, whichever
             // occurs first
+            // 向后遍历哈希表，直到遇见空槽为止，找到第一个与|key|相同的槽
+            // 注：开放地址法解决冲突
             for (int i = nextIndex(staleSlot, len);
                  (e = tab[i]) != null;
                  i = nextIndex(i, len)) {
@@ -546,15 +612,23 @@ public class ThreadLocal<T> {
                 // The newly stale slot, or any other stale slot
                 // encountered above it, can then be sent to expungeStaleEntry
                 // to remove or rehash all of the other entries in run.
+                // 更新线程私有变量中的值
                 if (k == key) {
                     e.value = value;
 
+                    // 将当前的线程私有变量条目，替换到|staleSlot|对应的槽中
+                    // 注：参数|staleSlot|映射槽是原本就当前的线程私有变量条目应该在映射的位
+                    // 置，因为它本来就是一个过时的条目，替换没有副作用
                     tab[i] = tab[staleSlot];
                     tab[staleSlot] = e;
 
                     // Start expunge at preceding stale entry if it exists
+                    // 如果|staleSlot|就是该哈希表第一个过时的条目，则从该条目开始清除
+                    // 注：该条目是刚被替换过来的待清除的过期条目
                     if (slotToExpunge == staleSlot)
                         slotToExpunge = i;
+
+                    // 从第一个过时条目开始清除，内部有遍历逻辑
                     cleanSomeSlots(expungeStaleEntry(slotToExpunge), len);
                     return;
                 }
@@ -562,15 +636,23 @@ public class ThreadLocal<T> {
                 // If we didn't find stale entry on backward scan, the
                 // first stale entry seen while scanning for key is the
                 // first still present in the run.
+                // 如果|staleSlot|就是该哈希表第一个过时的条目，且在向后遍历过程中发现新的过
+                // 期条目，更新清除过期条目的开始索引
+                // 注：索引|staleSlot|的对应的槽，一定会被新的私有变量填充。所以在没有前向的
+                // 过时条目场景下，将过期条目向后更新。此时就会清除全部过期条目
                 if (k == null && slotToExpunge == staleSlot)
                     slotToExpunge = i;
             }
 
             // If key not found, put new entry in stale slot
+            // 线程私有变量在哈希表中不存在，在|staleSlot|位置新建该键值对
             tab[staleSlot].value = null;
             tab[staleSlot] = new Entry(key, value);
 
             // If there are any other stale entries in run, expunge them
+            // 如果第一个过时条目的索引和|staleSlot|索引不同，说明哈希表中至少有一个过时条目
+            // 注：索引|staleSlot|的对应的槽，一定会被新的私有变量填充。所以要判断哈希表是否
+            // 有过时条目，需要有此判断逻辑
             if (slotToExpunge != staleSlot)
                 cleanSomeSlots(expungeStaleEntry(slotToExpunge), len);
         }
@@ -586,11 +668,14 @@ public class ThreadLocal<T> {
          * (all between staleSlot and this slot will have been checked
          * for expunging).
          */
+        // 清除|staleSlot|位置的过时条目；并从|staleSlot|下一个位置开始遍历，直到遇到空槽为止，重
+        // 新rehash哈希表中的条目
         private int expungeStaleEntry(int staleSlot) {
             Entry[] tab = table;
             int len = tab.length;
 
             // expunge entry at staleSlot
+            // 清除位于|staleSlot|的条目
             tab[staleSlot].value = null;
             tab[staleSlot] = null;
             size--;
@@ -601,24 +686,30 @@ public class ThreadLocal<T> {
             for (i = nextIndex(staleSlot, len);
                  (e = tab[i]) != null;
                  i = nextIndex(i, len)) {
+                // 取出映射的槽中元素对应的本地变量对象引用
                 ThreadLocal<?> k = e.get();
-                if (k == null) {
+
+                if (k == null) {    // 清除过时条目
                     e.value = null;
                     tab[i] = null;
                     size--;
                 } else {
                     int h = k.threadLocalHashCode & (len - 1);
-                    if (h != i) {
-                        tab[i] = null;
+                    if (h != i) {   // rehash后，发现槽为已变更
+                        tab[i] = null;  // 清除原始条目，以准备迁移到新的槽中
 
                         // Unlike Knuth 6.4 Algorithm R, we must scan until
                         // null because multiple entries could have been stale.
+                        // 从新的槽为开始向后遍历，找到一个空槽位，以防止|e|条目
+                        // 注：开放地址法解决冲突
                         while (tab[h] != null)
                             h = nextIndex(h, len);
                         tab[h] = e;
                     }
                 }
             }
+
+            // 返回|staleSlot|后第一个空槽索引
             return i;
         }
 
@@ -646,19 +737,31 @@ public class ThreadLocal<T> {
          *
          * @return true if any stale entries have been removed.
          */
+        // 启发式扫描一些槽，以清除过时的条目。在添加新元素、或删除另一个过时元素时会调用此方法
+        // 注：从一个已知的不会过时条目|i|位置开始扫描
+        // 注：扫描|log2(n)|个槽位；除非找到过时的条目，此时将扫描|log2(table.length)-1|个
+        // 附加槽。从插入中调用时，|n|是元素数，但从|replaceStaleEntry|中调用时，它是表长度
+        // 注：设计如此扫描机制，主要是为了让扫描次数与元素数量成正比之间，让数据清理与扫描做个平
+        // 衡。如果每次都需要找到所有垃圾，就会导致某些插入将花费O(n)
         private boolean cleanSomeSlots(int i, int n) {
+            // 至少清理了一个过时数据
             boolean removed = false;
             Entry[] tab = table;
             int len = tab.length;
             do {
                 i = nextIndex(i, len);
                 Entry e = tab[i];
+                // 发现了过时的条目
                 if (e != null && e.get() == null) {
+                    // 重置n值，以附加扫描|log2(table.length)-1|个槽
                     n = len;
                     removed = true;
+                    // 清除|i|位置的过时条目，并重新rehash哈希表部分条目，返回下一个空槽索引
                     i = expungeStaleEntry(i);
                 }
             } while ( (n >>>= 1) != 0);
+
+            // 如果删除了任何过时条目，返回true
             return removed;
         }
 
@@ -668,9 +771,11 @@ public class ThreadLocal<T> {
          * shrink the size of the table, double the table size.
          */
         private void rehash() {
+            // 清除哈希表中的所有过时条目，并rehash表中所有条目
             expungeStaleEntries();
 
             // Use lower threshold for doubling to avoid hysteresis
+            // 若当前线程私有变量个数超过容量的3/4，执行扩容
             if (size >= threshold - threshold / 4)
                 resize();
         }
@@ -709,6 +814,7 @@ public class ThreadLocal<T> {
         /**
          * Expunge all stale entries in the table.
          */
+        // 清除哈希表中的所有过时条目，并rehash表中所有条目
         private void expungeStaleEntries() {
             Entry[] tab = table;
             int len = tab.length;
