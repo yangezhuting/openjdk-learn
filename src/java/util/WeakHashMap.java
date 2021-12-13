@@ -133,6 +133,9 @@ import java.util.function.Consumer;
  * @see         java.util.HashMap
  * @see         java.lang.ref.WeakReference
  */
+// 存储 k-v 键值对的无序映射表；它是HashMap的弱引用版本，其中|key|键为弱引用，当其外部无强引
+// 用链时，对应的实体会被适当的清除。接口|resize(),size(),getTable(),get()|都有清除逻辑
+// 注：主要用于实现内存敏感的本地缓存底层容器
 public class WeakHashMap<K,V>
     extends AbstractMap<K,V>
     implements Map<K,V> {
@@ -214,9 +217,12 @@ public class WeakHashMap<K,V>
         if (loadFactor <= 0 || Float.isNaN(loadFactor))
             throw new IllegalArgumentException("Illegal Load factor: "+
                                                loadFactor);
+        // 容量必须为2的指数倍
         int capacity = 1;
         while (capacity < initialCapacity)
             capacity <<= 1;
+
+        // 分配哈希表内存空间
         table = newTable(capacity);
         this.loadFactor = loadFactor;
         threshold = (int)(capacity * loadFactor);
@@ -314,7 +320,10 @@ public class WeakHashMap<K,V>
     /**
      * Expunges stale entries from the table.
      */
+    // 从哈希表中删除陈旧的条目
+    // 注：键|key|被GC回收删除，此方法用于删除与之关联的|value|
     private void expungeStaleEntries() {
+        // 获取、消费一个已经被GC的对象引用。该对象引用就是当前哈希表中的一个|key|键
         for (Object x; (x = queue.poll()) != null; ) {
             synchronized (queue) {
                 @SuppressWarnings("unchecked")
@@ -325,6 +334,7 @@ public class WeakHashMap<K,V>
                 Entry<K,V> p = prev;
                 while (p != null) {
                     Entry<K,V> next = p.next;
+                    // 当前迭代的|p|就是需要删除的|e|节点
                     if (p == e) {
                         if (prev == e)
                             table[i] = next;
@@ -336,6 +346,7 @@ public class WeakHashMap<K,V>
                         size--;
                         break;
                     }
+                    // 向前迭代
                     prev = p;
                     p = next;
                 }
@@ -461,9 +472,9 @@ public class WeakHashMap<K,V>
 
         modCount++;
         Entry<K,V> e = tab[i];
-        tab[i] = new Entry<>(k, value, queue, h, e);
+        tab[i] = new Entry<>(k, value, queue, h, e);    // 头插法添加一个元素
         if (++size >= threshold)
-            resize(tab.length * 2);
+            resize(tab.length * 2); // 扩容到原来的2倍
         return null;
     }
 
@@ -490,7 +501,7 @@ public class WeakHashMap<K,V>
         }
 
         Entry<K,V>[] newTable = newTable(newCapacity);
-        transfer(oldTable, newTable);
+        transfer(oldTable, newTable);   // 迁移节点
         table = newTable;
 
         /*
@@ -508,6 +519,7 @@ public class WeakHashMap<K,V>
     }
 
     /** Transfers all entries from src to dest tables */
+    // 迁移节点
     private void transfer(Entry<K,V>[] src, Entry<K,V>[] dest) {
         for (int j = 0; j < src.length; ++j) {
             Entry<K,V> e = src[j];

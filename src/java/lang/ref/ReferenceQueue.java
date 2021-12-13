@@ -33,6 +33,8 @@ package java.lang.ref;
  * @since    1.2
  */
 
+// 垃圾收集器在检测到某个对象可达性变更后，会将其添加到该引用队列中。提前是：该引用类型提供了队列。比
+// 如，在|WeakHashMap|类中就提供了该队列
 public class ReferenceQueue<T> {
 
     /**
@@ -51,6 +53,8 @@ public class ReferenceQueue<T> {
 
     static private class Lock { };
     private Lock lock = new Lock();
+
+    // 用户的|ReferenceQueue|队列，头引用
     private volatile Reference<? extends T> head = null;
     private long queueLength = 0;
 
@@ -58,11 +62,15 @@ public class ReferenceQueue<T> {
         synchronized (lock) {
             // Check that since getting the lock this reference hasn't already been
             // enqueued (and even then removed)
+            // 检查自从获得锁定以来，此元素还尚未入队列（甚至随后被删除）
+            // 注：此方法在临界区之外，需要校验当前元素是否已经被其他线程入队了
             ReferenceQueue<?> queue = r.queue;
             if ((queue == NULL) || (queue == ENQUEUED)) {
                 return false;
             }
             assert queue == this;
+
+            // 设置|r|的|queue|状态为已入队列；采用头插法，将|r|添加至用户队列
             r.queue = ENQUEUED;
             r.next = (head == null) ? r : head;
             head = r;
@@ -70,6 +78,8 @@ public class ReferenceQueue<T> {
             if (r instanceof FinalReference) {
                 sun.misc.VM.addFinalRefCount(1);
             }
+
+            // 通知消费线程（|remove()|线程），当前队列有新元素
             lock.notifyAll();
             return true;
         }
@@ -77,11 +87,14 @@ public class ReferenceQueue<T> {
 
     @SuppressWarnings("unchecked")
     private Reference<? extends T> reallyPoll() {       /* Must hold lock */
+        // 采用头删法，消费队列中一个元素
         Reference<? extends T> r = head;
         if (r != null) {
             head = (r.next == r) ?
                 null :
                 r.next; // Unchecked due to the next field having a raw type in Reference
+
+            // 置空被消费元素的指针引用
             r.queue = NULL;
             r.next = r;
             queueLength--;
@@ -129,6 +142,7 @@ public class ReferenceQueue<T> {
      * @throws  InterruptedException
      *          If the timeout wait is interrupted
      */
+    // 获取、消费用户的|ReferenceQueue|队列中一个元素；若超过|timeout|时限后，队列中仍无元素，返回null
     public Reference<? extends T> remove(long timeout)
         throws IllegalArgumentException, InterruptedException
     {

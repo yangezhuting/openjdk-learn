@@ -686,6 +686,7 @@ public class ThreadLocal<T> {
          */
         // 清除|staleSlot|位置的过时条目；并从|staleSlot|下一个位置开始遍历，直到遇到空槽为止，重
         // 新rehash哈希表中的条目
+        // 注：键|key|被GC回收删除，此方法用于删除与之关联的|value|
         private int expungeStaleEntry(int staleSlot) {
             Entry[] tab = table;
             int len = tab.length;
@@ -831,6 +832,7 @@ public class ThreadLocal<T> {
          * Expunge all stale entries in the table.
          */
         // 清除哈希表中的所有过时条目，并rehash表中所有条目
+        // 注：键|key|被GC回收删除，此方法用于删除与之关联的|value|
         private void expungeStaleEntries() {
             Entry[] tab = table;
             int len = tab.length;
