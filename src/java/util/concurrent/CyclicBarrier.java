@@ -136,6 +136,14 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * @author Doug Lea
  */
+// 回环栅栏。通过它，可以实现让一组线程都等待至某处（执行了|await()|线程会被挂起），等所有线程都准
+// 备好后（有|parties|个线程都执行了|await()|方法），再全部同时执行后续逻辑。回环：指当所有等待线
+// 程都被释放以后，|CyclicBarrier|可以被重用；栅栏：指线程会被|await()|阻塞挂起
+// 注：线程的挂起、释放都执行了相同的|await()|方法。只有当所有线程都执行了|await()|方法后，回环栅
+// 栏才会同时的、唤醒所有线程执行后续逻辑；在此之前，执行|await()|的线程都将被挂起
+// 亮点：回环栅栏使用|generation|字段，将被挂起线程和回环栅栏的版本进行绑定。其核心思想是：最后进入
+// 栅栏处的线程，在唤醒所有等待线程同时运行后续逻辑前，会重新生成版本字段，以表明上个版本已过期（而等
+// 待在该版本的线程都已经被唤醒），并进入下个版本的回环及栅栏
 public class CyclicBarrier {
     /**
      * Each use of the barrier is represented as a generation instance.
@@ -174,6 +182,7 @@ public class CyclicBarrier {
      * Updates state on barrier trip and wakes up everyone.
      * Called only while holding lock.
      */
+    // 重置回环栅栏的版本、数量，以表明上个版本已过期，而等待在该版本的线程都已经被唤醒
     private void nextGeneration() {
         // signal completion of last generation
         trip.signalAll();
@@ -186,6 +195,7 @@ public class CyclicBarrier {
      * Sets current barrier generation as broken and wakes up everyone.
      * Called only while holding lock.
      */
+    // 将回环栅栏broken字段置位，标志其不可再复用
     private void breakBarrier() {
         generation.broken = true;
         count = parties;
@@ -195,45 +205,60 @@ public class CyclicBarrier {
     /**
      * Main barrier code, covering the various policies.
      */
+    // 只有当|parties|个线程都执行了|await()|方法后，回环栅栏才会同时的、唤醒所有线程执行后续逻
+    // 辑；在此之前，执行|await()|的线程都将被挂起，直到抛出超时异常（如果设置了超时的话）
     private int dowait(boolean timed, long nanos)
         throws InterruptedException, BrokenBarrierException,
                TimeoutException {
         final ReentrantLock lock = this.lock;
         lock.lock();
         try {
+            // 保存当前线程被挂起时的版本引用。即，将被挂起线程和回环栅栏的版本进行绑定
+            // 注：最后进入栅栏处的线程，在唤醒所有等待线程同时运行后续逻辑前，会重新生成版本字段，以
+            // 表明上个版本已过期（而等待在该版本的线程都已经被唤醒），并进入下个版本的回环及栅栏
             final Generation g = generation;
 
+            // 回环栅栏broken字段已被置位，标志其不可再复用
             if (g.broken)
                 throw new BrokenBarrierException();
 
+            // 若线程被中断，将回环栅栏broken字段置位，标志其不可再复用
             if (Thread.interrupted()) {
                 breakBarrier();
                 throw new InterruptedException();
             }
 
+            // 递减等待线程个数
             int index = --count;
+
+            // 当第|parties|个线程也执行到栅栏处后，先执行|barrierCommand|方法，再唤醒所有等待线程
+            // 注：唤醒所有等待线程，同时重置回环栅栏的版本，以表明上个版本已过期（等待在该版本的线程都将被唤醒）
             if (index == 0) {  // tripped
                 boolean ranAction = false;
                 try {
                     final Runnable command = barrierCommand;
+                    // 先执行|barrierCommand|方法
                     if (command != null)
                         command.run();
                     ranAction = true;
+                    // 重置回环栅栏当前版本
                     nextGeneration();
                     return 0;
                 } finally {
+                    // 若执行|barrierCommand|方法抛出异常，将回环栅栏broken字段置位，标志其不可再复用
                     if (!ranAction)
                         breakBarrier();
                 }
             }
 
             // loop until tripped, broken, interrupted, or timed out
+            // 在|parties|个线程到达栅栏处前，所有线程都将被挂起，直到抛出超时异常（如果设置了超时的话）
             for (;;) {
                 try {
                     if (!timed)
-                        trip.await();
+                        trip.await();   // 未设限时，直接挂起当前线程
                     else if (nanos > 0L)
-                        nanos = trip.awaitNanos(nanos);
+                        nanos = trip.awaitNanos(nanos); // 限时挂起当前线程
                 } catch (InterruptedException ie) {
                     if (g == generation && ! g.broken) {
                         breakBarrier();
@@ -242,16 +267,22 @@ public class CyclicBarrier {
                         // We're about to finish waiting even if we had not
                         // been interrupted, so this interrupt is deemed to
                         // "belong" to subsequent execution.
+
+                        // 所有线程都已经达到了栅栏处，并且最后进入的线程也执行了唤醒所有
+                        // 线程逻辑。此时，当前线程（个别线程）出现了中断，保留该中断状态
                         Thread.currentThread().interrupt();
                     }
                 }
 
+                // 回环栅栏broken字段已被置位，标志其不可再复用
                 if (g.broken)
                     throw new BrokenBarrierException();
 
+                // 表明该回环栅栏已经被执行过唤醒逻辑，并进入下一代的"栅栏"
                 if (g != generation)
                     return index;
 
+                // 栅栏已超时，将回环栅栏broken字段置位，标志其不可再复用；同时抛出超时异常
                 if (timed && nanos <= 0L) {
                     breakBarrier();
                     throw new TimeoutException();
@@ -274,6 +305,8 @@ public class CyclicBarrier {
      *        tripped, or {@code null} if there is no action
      * @throws IllegalArgumentException if {@code parties} is less than 1
      */
+    // |parties|：让多少个线程或者任务等待至栅栏处
+    // |barrierAction|：当线程都达到栅栏处后，要同时执行后续逻辑前，被先行执行一次的方法
     public CyclicBarrier(int parties, Runnable barrierAction) {
         if (parties <= 0) throw new IllegalArgumentException();
         this.parties = parties;
@@ -357,6 +390,7 @@ public class CyclicBarrier {
      *         broken when {@code await} was called, or the barrier
      *         action (if present) failed due to an exception
      */
+    // 挂起当前线程，直至|parties|个线程都到达了栅栏处，再同时执行后续任务
     public int await() throws InterruptedException, BrokenBarrierException {
         try {
             return dowait(false, 0L);
@@ -428,6 +462,7 @@ public class CyclicBarrier {
      *         when {@code await} was called, or the barrier action (if
      *         present) failed due to an exception
      */
+    // 限时版的|await()|。相比无限时，此版本会让被栅栏挂起的线程，在超时后，立即抛出超时异常
     public int await(long timeout, TimeUnit unit)
         throws InterruptedException,
                BrokenBarrierException,
