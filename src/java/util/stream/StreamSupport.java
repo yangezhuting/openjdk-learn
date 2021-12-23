@@ -64,8 +64,14 @@ public final class StreamSupport {
      *        stream.
      * @return a new sequential or parallel {@code Stream}
      */
+    // 以分割器为数据源，创建一个流，该流的泛型为分割器（集合）中元素的类型
+    // 注：分割器是一种特殊的迭代器，它能够反复切割原始容器中的元素到更小的分割器中，实现并行流切割任务
     public static <T> Stream<T> stream(Spliterator<T> spliterator, boolean parallel) {
         Objects.requireNonNull(spliterator);
+        // 依赖返回值，我们可推导出该|Head|流的第二个泛型参数|E_OUT|为分割器中元素的类型，从而就可确定
+        // 该流的输出类型；但此时我们还无法推导出它的输入类型|E_IN|，也无需推导！因为|Head|是一个起始管
+        // 道流，它只负责将自己的输出，与后续的管道流的输入进行连接即可。即，起始流的输入类型并不重要
+        // 注：流的泛型，始终和流的输出类型，也就是和流的产出数据的类型是一致的
         return new ReferencePipeline.Head<>(spliterator,
                                             StreamOpFlag.fromCharacteristics(spliterator),
                                             parallel);

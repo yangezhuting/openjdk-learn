@@ -372,6 +372,7 @@ public interface LongStream extends BaseStream<Long, LongStream> {
      * @see #max()
      * @see #average()
      */
+    // 遍历执行流的所有链式调用的表达式，规约流中所有元素，最终得到一个长整型值返回
     long reduce(long identity, LongBinaryOperator op);
 
     /**
@@ -464,6 +465,7 @@ public interface LongStream extends BaseStream<Long, LongStream> {
      *
      * @return the sum of elements in this stream
      */
+    // 流中所有元素求和
     long sum();
 
     /**

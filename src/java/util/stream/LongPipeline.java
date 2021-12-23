@@ -51,6 +51,7 @@ import java.util.function.Supplier;
  * @param <E_IN> type of elements in the upstream source
  * @since 1.8
  */
+// 引用管道流|ReferencePipeline|的特化版本，其输出类型被固定为|Long|类型
 abstract class LongPipeline<E_IN>
         extends AbstractPipeline<E_IN, Long, LongStream>
         implements LongStream {
@@ -390,6 +391,8 @@ abstract class LongPipeline<E_IN>
         evaluate(ForEachOps.makeLong(action, true));
     }
 
+    // 流中所有元素求和
+    // 算法核心：遍历流中的每个元素，将他们值相加，最终规约得一个长整型返回
     @Override
     public final long sum() {
         // use better algorithm to compensate for intermediate overflow?
@@ -433,6 +436,7 @@ abstract class LongPipeline<E_IN>
                        LongSummaryStatistics::combine);
     }
 
+    // 遍历执行流的所有链式调用的表达式，规约流中所有元素，最终得到一个长整型值返回
     @Override
     public final long reduce(long identity, LongBinaryOperator op) {
         return evaluate(ReduceOps.makeLong(identity, op));
@@ -566,10 +570,15 @@ abstract class LongPipeline<E_IN>
          * @param inputShape The stream shape for the upstream pipeline stage
          * @param opFlags Operation flags for the new stage
          */
+        // 创建一个无状态的管道流，将其附加到|upstream|节点的后驱节点
+        // 注：|upstream|参数说明：上一个管道流的输出类型（第二个类型参数），就是当前无状态
+        // 管道流的输入类型
         StatelessOp(AbstractPipeline<?, E_IN, ?> upstream,
                     StreamShape inputShape,
                     int opFlags) {
             super(upstream, opFlags);
+
+            // 前一个管道流|upstream|，必须是引用类型的管道流
             assert upstream.getOutputShape() == inputShape;
         }
 

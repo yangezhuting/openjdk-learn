@@ -61,6 +61,8 @@ import java.util.function.Predicate;
  * @see DoubleStream
  * @see <a href="package-summary.html">java.util.stream</a>
  */
+// 该接口定义了流的三种形式（串行、并行、无序）和两种遍历方式（单线程、多线程）
+// 注：泛型的第二个参数|S|必须是自己的子类。即，|T|指定流中元素的类型，|S|则是该|stream|的实现类
 public interface BaseStream<T, S extends BaseStream<T, S>>
         extends AutoCloseable {
     /**

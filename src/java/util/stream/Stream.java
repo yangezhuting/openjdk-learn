@@ -166,6 +166,9 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      *                  should be included
      * @return the new stream
      */
+    // 过滤器。接收一个布尔计算表达式，遍历分割器中每个元素，找出符合条件的元素（表达式返回true）转
+    // 移到新的集合中，并返回该集合的流
+    // 注：过滤器方法的参数限定表示，其参数必须和流的泛型相同，或是它的超类
     Stream<T> filter(Predicate<? super T> predicate);
 
     /**
@@ -181,6 +184,10 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      *               function to apply to each element
      * @return the new stream
      */
+    // 映射器。接收一个一元计算表达式，遍历分割器中每个元素，顺序映射成另一个元素（表达式返回结果）转
+    // 移到新的集合中，并返回该集合的流
+    // 注：映射器方法的参数限定表示，其参数必须和流的泛型相同，或是它的超类；其返回类型为新流的泛型，
+    // 或是他的子类
     <R> Stream<R> map(Function<? super T, ? extends R> mapper);
 
     /**
@@ -195,6 +202,7 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      *               function to apply to each element
      * @return the new stream
      */
+    // 泛型版|map()|的具象化版本，其限定了返回类型为|IntStream|。即，将一个流转化成整型流
     IntStream mapToInt(ToIntFunction<? super T> mapper);
 
     /**
@@ -209,6 +217,7 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      *               function to apply to each element
      * @return the new stream
      */
+    // 泛型版|map()|的具象化版本，其限定了返回类型为|LongStream|。即，将一个流转化成长整型流
     LongStream mapToLong(ToLongFunction<? super T> mapper);
 
     /**
@@ -223,6 +232,7 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      *               function to apply to each element
      * @return the new stream
      */
+    // 泛型版|map()|的具象化版本，其限定了返回类型为|DoubleStream|。即，将一个流转化成双精度流
     DoubleStream mapToDouble(ToDoubleFunction<? super T> mapper);
 
     /**
@@ -267,6 +277,14 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      *               of new values
      * @return the new stream
      */
+    // 平铺映射器。接收一个一元计算表达式，遍历分割器中每个元素，顺序映射成一个流（需在|mapper|表达式
+    // 中，将元素转换成流），返回的流类型就是表达式|mapper|的返回
+    // 注1：通常用于将一个泛型为列表、数组的原始流转换成一个一维的流，该新流的泛型为原始流的列表的元素类
+    // 型。如同将一个拥有二维元素的流平铺、展开成一维元素的流一样！
+    // 注2：底层使用双重循环实现了将二维元素当作一维处理。即，|flatMap()|对应的算法链节点，会把表达式
+    // |mapper|的返回值当作一个数据源，遍历该数据源，执行原始流的后续的链式表达式（|flatMap()|之后的
+    // 表达式）。效果就是，原始流中元素在被遍历的同时，|mapper|的返回流中的元素再次被遍历
+    // 注3：平铺映射器方法的参数限定表示，其参数必须和流的泛型相同，或是它的超类；其返回类型为流
     <R> Stream<R> flatMap(Function<? super T, ? extends Stream<? extends R>> mapper);
 
     /**
@@ -287,6 +305,7 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      * @return the new stream
      * @see #flatMap(Function)
      */
+    // 泛型版|flatMap()|的具象化版本，其限定了返回类型为|IntStream|。即，将一个流平铺为整型流
     IntStream flatMapToInt(Function<? super T, ? extends IntStream> mapper);
 
     /**
@@ -307,6 +326,7 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      * @return the new stream
      * @see #flatMap(Function)
      */
+    // 泛型版|flatMap()|的具象化版本，其限定了返回类型为|IntStream|。即，将一个流平铺为长整型流
     LongStream flatMapToLong(Function<? super T, ? extends LongStream> mapper);
 
     /**
@@ -327,6 +347,7 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      * @return the new stream
      * @see #flatMap(Function)
      */
+    // 泛型版|flatMap()|的具象化版本，其限定了返回类型为|IntStream|。即，将一个流平铺为双精度
     DoubleStream flatMapToDouble(Function<? super T, ? extends DoubleStream> mapper);
 
     /**
@@ -356,6 +377,8 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      *
      * @return the new stream
      */
+    // 返回原始流中元素去重后组成的新流。有状态流
+    // 注：对于有序流，不同元素的选择是稳定的（保留遇到顺序中最先出现的元素）。对于无序流，没有稳定性保证
     Stream<T> distinct();
 
     /**
@@ -372,6 +395,8 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      *
      * @return the new stream
      */
+    // 返回原始流中元素排序后组成的新流，按自然顺序排序。有状态流
+    // 注：对于有序流，排序是稳定的。对于无序流，没有稳定性保证
     Stream<T> sorted();
 
     /**
@@ -389,6 +414,8 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      *                   {@code Comparator} to be used to compare stream elements
      * @return the new stream
      */
+    // 返回原始流中元素排序后组成的新流，按指定比较器顺序排序。有状态流
+    // 注：对于有序流，排序是稳定的。对于无序流，没有稳定性保证
     Stream<T> sorted(Comparator<? super T> comparator);
 
     /**
@@ -420,6 +447,8 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      *                 they are consumed from the stream
      * @return the new stream
      */
+    // 返回原始流中元素组成的新流，并在每个元素上执行|action|消费方法
+    // 注：该方法主要用于调试场景；少数会在消费方法中修改原始流中元素的状态（使用|forEach()|会更好）
     Stream<T> peek(Consumer<? super T> action);
 
     /**
@@ -447,6 +476,13 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      * @return the new stream
      * @throws IllegalArgumentException if {@code maxSize} is negative
      */
+    // 返回原始流中指定数量元素组成的新流。有状态流、短路策略（遍历指定数量后，立即停止）
+    // 注：虽然|limit()|在顺序管道流上通常是一个廉价的操作，但它在有序并行管道上可能非常昂贵，特
+    // 别是对于|maxSize|的大值，因为|limit(n)|被限制为：不仅返回任何|n|个元素，而且返回前|n|个
+    // 顺序元素。如果语义允许，请使用无序流（例如|generate(Supplier)|）或使用|unordered()|删
+    // 除排序约束，可能会使并行管道中的|limit()|显着加速
+    // 注：如果需要顺序保持一致，并且在并行管道中使用|limit()|遇到性能或内存利用率低的问题，则切换
+    // 到使用|sequence()|可能会提高性能
     Stream<T> limit(long maxSize);
 
     /**
@@ -495,6 +531,8 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      * @param action a <a href="package-summary.html#NonInterference">
      *               non-interfering</a> action to perform on the elements
      */
+    // 接收一个无返回值的一元计算表达式，遍历每个元素，顺序消费每一个数据
+    // 注：消费方法的参数泛型限定，表示其参数必须和流的泛型相同，或是它的超类
     void forEach(Consumer<? super T> action);
 
     /**
@@ -604,6 +642,8 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      *                    function for combining two values
      * @return the result of the reduction
      */
+    // 接收一个二元计算表达式，遍历每个元素，顺序规约每一个元素
+    // 注：计算方法的参数类型、返回类型，必须和原始流的元素的类型相同
     T reduce(T identity, BinaryOperator<T> accumulator);
 
     /**
@@ -851,6 +891,7 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      *
      * @return the count of elements in this stream
      */
+    // 统计流中元素个数
     long count();
 
     /**
@@ -872,6 +913,8 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      * @return {@code true} if any elements of the stream match the provided
      * predicate, otherwise {@code false}
      */
+    // 匹配任意元素。即，只要有一个条件满足即返回true
+    // 注：只要有一个匹配成功，立即返回true，短路策略
     boolean anyMatch(Predicate<? super T> predicate);
 
     /**
@@ -895,6 +938,8 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      * @return {@code true} if either all elements of the stream match the
      * provided predicate or the stream is empty, otherwise {@code false}
      */
+    // 匹配所有元素。即，必须全部都满足才会返回true
+    // 注：只要有一个匹配不成功，立即返回false，短路策略
     boolean allMatch(Predicate<? super T> predicate);
 
     /**
@@ -918,6 +963,8 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      * @return {@code true} if either no elements of the stream match the
      * provided predicate or the stream is empty, otherwise {@code false}
      */
+    // 不匹配所有元素。即，全都不满足才会返回true
+    // 注：只要有一个匹配成功，立即返回false，短路策略
     boolean noneMatch(Predicate<? super T> predicate);
 
     /**
@@ -994,6 +1041,7 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      * @param values the elements of the new stream
      * @return the new stream
      */
+    // 以可变参数（数组）为数据源，创建一个流，该流的泛型为可变参数（数组中元素）的类型
     @SafeVarargs
     @SuppressWarnings("varargs") // Creating a stream from an array is safe
     public static<T> Stream<T> of(T... values) {

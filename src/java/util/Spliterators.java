@@ -177,7 +177,7 @@ public final class Spliterators {
     // 基于数组创建一个分割器
     public static <T> Spliterator<T> spliterator(Object[] array, int fromIndex, int toIndex,
                                                  int additionalCharacteristics) {
-        // 越界检测。|toIndex|是一个超尾索引，范围是[origin, array.length]
+        // 越界检测。|toIndex|是一个超尾索引，范围是[fromIndex, toIndex)
         checkFromToBounds(Objects.requireNonNull(array).length, fromIndex, toIndex);
         return new ArraySpliterator<>(array, fromIndex, toIndex, additionalCharacteristics);
     }
@@ -386,7 +386,7 @@ public final class Spliterators {
      * the end index, if the start index is negative, or the end index is
      * greater than the array length
      */
-    // 越界检测。|fence|是一个超尾索引，范围是[origin, arrayLength]
+    // 越界检测。|fence|是一个超尾索引，范围是[origin, fence)
     private static void checkFromToBounds(int arrayLength, int origin, int fence) {
         if (origin > fence) {
             throw new ArrayIndexOutOfBoundsException(

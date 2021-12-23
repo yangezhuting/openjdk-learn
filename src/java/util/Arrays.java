@@ -4894,6 +4894,7 @@ public class Arrays {
      *         the array size
      * @since 1.8
      */
+    // 基于数组创建一个分割器
     public static <T> Spliterator<T> spliterator(T[] array, int startInclusive, int endExclusive) {
         return Spliterators.spliterator(array, startInclusive, endExclusive,
                                         Spliterator.ORDERED | Spliterator.IMMUTABLE);
@@ -5026,6 +5027,7 @@ public class Arrays {
      * @return a {@code Stream} for the array
      * @since 1.8
      */
+    // 以数组为数据源，创建一个流，该流的泛型为数组中元素的类型
     public static <T> Stream<T> stream(T[] array) {
         return stream(array, 0, array.length);
     }

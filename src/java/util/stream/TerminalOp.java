@@ -42,6 +42,10 @@ import java.util.Spliterator;
  * @param <R>    the type of the result
  * @since 1.8
  */
+// 流的终结运算接口|TerminalOp|，用于描述流中元素处理方式（短路或顺序）、描述流中元素消费方式（并
+// 行、串行）；以及提供一个用于流的终止方法对应到算法链的尾部节点的创建工厂|makeSink()|
+// 注：构建算法链表时，将从|makeSink()|创建的算法节点开始，逆向新增每个表达式对应的算法节点；最后
+// 在正向遍历算法链表执行真正的计算时，此节点会作为终结节点，执行最后一个计算表达式
 interface TerminalOp<E_IN, R> {
     /**
      * Gets the shape of the input type of this operation.

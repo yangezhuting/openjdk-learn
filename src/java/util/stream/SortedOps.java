@@ -138,8 +138,10 @@ final class SortedOps {
             if (StreamOpFlag.SORTED.isKnown(flags) && isNaturalSort)
                 return sink;
             else if (StreamOpFlag.SIZED.isKnown(flags))
+                // 对于可计数的流，底层首先使用数组存储所有流中的元素，最后使用|Arrays.sort|排序
                 return new SizedRefSortingSink<>(sink, comparator);
             else
+                // 对于不可计数的流，底层首先使用列表容器存储所有流中的元素，最后使用|ArrayList.sort|排序
                 return new RefSortingSink<>(sink, comparator);
         }
 

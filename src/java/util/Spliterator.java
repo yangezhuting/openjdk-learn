@@ -293,8 +293,8 @@ import java.util.function.LongConsumer;
  * @see Collection
  * @since 1.8
  */
-// 分割器是一种特殊的迭代器，它能够反复切割原始容器中的元素到更小的分割器中
-// 应用场景：将大数据反复“裂变”成一系列小数据。多应用在stream流处理中
+// 分割器是一种特殊的迭代器，它能够反复切割原始容器中的元素到更小的分割器中；即，将大数据反复“裂变”成一系列小数据
+// 注：多应用在stream流处理中；特别是并行流，被分割成多份的子元素，可以分别交于不于的线程去遍历，以提高效率
 public interface Spliterator<T> {
     /**
      * If a remaining element exists, performs the given action on it,

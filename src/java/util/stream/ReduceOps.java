@@ -48,6 +48,9 @@ import java.util.function.Supplier;
  *
  * @since 1.8
  */
+// 创建各种流支持的终止方法对应的终结运算对象的工厂方法
+// 注：为什么取名规约？可能是流支持的很多终止方法都有缩小数据源的特性（比如：求和、求平均、求最大、过滤
+// 等等），又或者可能是流的所有链式调用，此时要真正的遍历运行了
 final class ReduceOps {
 
     private ReduceOps() { }
@@ -377,16 +380,18 @@ final class ReduceOps {
      * @param operator the combining function
      * @return a {@code TerminalOp} implementing the reduction
      */
+    // 返回输入、输出都长整型的终结运算对象。可用于流的求和
     public static TerminalOp<Long, Long>
     makeLong(long identity, LongBinaryOperator operator) {
         Objects.requireNonNull(operator);
+        // 规约：遍历流中每个元素，执行|operator|二元表达式，将结果逐步规约到|state|字段中
         class ReducingSink
                 implements AccumulatingSink<Long, Long, ReducingSink>, Sink.OfLong {
             private long state;
 
             @Override
             public void begin(long size) {
-                state = identity;
+                state = identity;   // 设置初值
             }
 
             @Override
@@ -404,6 +409,7 @@ final class ReduceOps {
                 accept(other.state);
             }
         }
+        // 泛型限定：标识该终结运算对象的输入、输出类型都是|Long|
         return new ReduceOp<Long, Long, ReducingSink>(StreamShape.LONG_VALUE) {
             @Override
             public ReducingSink makeSink() {
@@ -702,9 +708,16 @@ final class ReduceOps {
             return inputShape;
         }
 
+        // 串行消费流中的每个元素，内部遍历执行流的所有链式调用的表达式
+        // 注：|helper|为管道流链表中最后一个节点，其泛型参数|T|是其输出类型，它还是终结运算对象的
+        // 输入类型；|spliterator|为数据源分割器
         @Override
         public <P_IN> R evaluateSequential(PipelineHelper<T> helper,
                                            Spliterator<P_IN> spliterator) {
+            // |makeSink()|是流的终止方法对应到算法链的尾部节点的创建工厂
+            // 注：构建算法链表时，将从|makeSink()|创建的算法节点开始，逆向新增每个表达式对应的算
+            // 法节点；最后在正向遍历算法链表执行真正的计算时，此节点会作为终结节点，执行最后一个计
+            // 算表达式
             return helper.wrapAndCopyInto(makeSink(), spliterator).get();
         }
 

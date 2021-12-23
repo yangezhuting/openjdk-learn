@@ -577,6 +577,8 @@ public interface Collection<E> extends Iterable<E> {
      * @return a sequential {@code Stream} over the elements in this collection
      * @since 1.8
      */
+    // 以当前集合的分割器为数据源，创建一个流，该流的泛型为集合中元素的类型
+    // 注：分割器是一种特殊的迭代器，它能够反复切割原始容器中的元素到更小的分割器中，实现并行流切割任务
     default Stream<E> stream() {
         return StreamSupport.stream(spliterator(), false);
     }

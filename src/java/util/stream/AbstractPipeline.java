@@ -179,13 +179,18 @@ abstract class AbstractPipeline<E_IN, E_OUT, S extends BaseStream<E_OUT, S>>
      */
     AbstractPipeline(Spliterator<?> source,
                      int sourceFlags, boolean parallel) {
+        // 设置前驱节点指针为空，标识没有前驱。用于起始管道流节点
         this.previousStage = null;
+        // 保存分割器（集合）源指针。用于引用数据源
         this.sourceSpliterator = source;
+        // 数据源来源于当前对象
         this.sourceStage = this;
+        // 设置流的flag位，标识为stream流类型
         this.sourceOrOpFlags = sourceFlags & StreamOpFlag.STREAM_MASK;
         // The following is an optimization of:
         // StreamOpFlag.combineOpFlags(sourceOrOpFlags, StreamOpFlag.INITIAL_OPS_VALUE);
         this.combinedFlags = (~(sourceOrOpFlags << 1)) & StreamOpFlag.INITIAL_OPS_VALUE;
+        // 设置深度为0，标识这是管道流的起始节点（根节点）
         this.depth = 0;
         this.parallel = parallel;
     }
@@ -198,18 +203,31 @@ abstract class AbstractPipeline<E_IN, E_OUT, S extends BaseStream<E_OUT, S>>
      * @param opFlags the operation flags for the new stage, described in
      * {@link StreamOpFlag}
      */
+    // 基于前一个管道流，新建管道流，它将被立即附加到管道流链表中，作为|previousStage|的后驱节点
     AbstractPipeline(AbstractPipeline<?, E_IN, ?> previousStage, int opFlags) {
+        // 上一个流节点，此时必须还没有后驱节点
         if (previousStage.linkedOrConsumed)
             throw new IllegalStateException(MSG_STREAM_LINKED);
         previousStage.linkedOrConsumed = true;
-        previousStage.nextStage = this;
 
+        // 尾插法，将当前流节点添加为前一个流节点的后驱节点；与前一个节点形成形成了双向链表
+        previousStage.nextStage = this;
         this.previousStage = previousStage;
+
+        // 设置源数据，至少需要经过一次计算
         this.sourceOrOpFlags = opFlags & StreamOpFlag.OP_MASK;
+
+        // 合并管道流链表中所有前向的节点的flag
         this.combinedFlags = StreamOpFlag.combineOpFlags(opFlags, previousStage.combinedFlags);
+
+        // 设置源数据流引用指针，始终指向起始管道流|Head|对象
         this.sourceStage = previousStage.sourceStage;
+
+        // 若管道流链表中任一节点是有状态的，设置源数据流对象也是有状态的
         if (opIsStateful())
             sourceStage.sourceAnyStateful = true;
+
+        // 递归深度增一
         this.depth = previousStage.depth + 1;
     }
 
@@ -223,8 +241,14 @@ abstract class AbstractPipeline<E_IN, E_OUT, S extends BaseStream<E_OUT, S>>
      * @param terminalOp the terminal operation to be applied to the pipeline.
      * @return the result
      */
+    // 执行流的终结运算对象。该终结运算对象定义了流中元素的消费方式（串行、并行）
+    // 注：终结运算泛型参数|E_OUT|，指定了其输入类型，必须和当前管道流的输出类型一致
     final <R> R evaluate(TerminalOp<E_OUT, R> terminalOp) {
+        // 能使用该终结运算的管道流，其输出和终结运算输入的流类型必须一致
+        // 注：泛型参数|E_OUT|和此处的断言表达式目的基本一致，不过前者在编译器、后者在运行期
         assert getOutputShape() == terminalOp.inputShape();
+
+        // 将最后一个管道流对象的入队状态也置位。即，标识当前流已经管道流
         if (linkedOrConsumed)
             throw new IllegalStateException(MSG_STREAM_LINKED);
         linkedOrConsumed = true;
@@ -442,12 +466,16 @@ abstract class AbstractPipeline<E_IN, E_OUT, S extends BaseStream<E_OUT, S>>
     @SuppressWarnings("unchecked")
     private Spliterator<?> sourceSpliterator(int terminalFlags) {
         // Get the source spliterator of the pipeline
+
+        // 获取分割器数据源；获取到分割器后，立即将其置空
+        // 注：数据不能重复消费。此时分割器中的数据已消费或者正在消费；更重要的是，很多数据、算法并不保证可重入
         Spliterator<?> spliterator = null;
         if (sourceStage.sourceSpliterator != null) {
             spliterator = sourceStage.sourceSpliterator;
             sourceStage.sourceSpliterator = null;
         }
         else if (sourceStage.sourceSupplier != null) {
+            // 使用提供者模式获取分割器
             spliterator = (Spliterator<?>) sourceStage.sourceSupplier.get();
             sourceStage.sourceSupplier = null;
         }
@@ -497,6 +525,7 @@ abstract class AbstractPipeline<E_IN, E_OUT, S extends BaseStream<E_OUT, S>>
         return StreamOpFlag.SIZED.isKnown(getStreamAndOpFlags()) ? spliterator.getExactSizeIfKnown() : -1;
     }
 
+    // 构建算法链表，并执行
     @Override
     final <P_IN, S extends Sink<E_OUT>> S wrapAndCopyInto(S sink, Spliterator<P_IN> spliterator) {
         copyInto(wrapSink(Objects.requireNonNull(sink)), spliterator);
@@ -507,12 +536,17 @@ abstract class AbstractPipeline<E_IN, E_OUT, S extends BaseStream<E_OUT, S>>
     final <P_IN> void copyInto(Sink<P_IN> wrappedSink, Spliterator<P_IN> spliterator) {
         Objects.requireNonNull(wrappedSink);
 
-        if (!StreamOpFlag.SHORT_CIRCUIT.isKnown(getStreamAndOpFlags())) {
+        // 流中元素的处理方式分支。有短路、顺序方式
+        // 注：顺序策略是，始终遍历分割器中的所有元素，执行算法链表中的表达式
+        // 短路策略是，遍历操作随时可能结束。比如流的|anyMatch()|方法，在匹配到数据后，会立即结束
+
+        if (!StreamOpFlag.SHORT_CIRCUIT.isKnown(getStreamAndOpFlags())) {   // 顺序策略
             wrappedSink.begin(spliterator.getExactSizeIfKnown());
+            // 遍历流中每个元素，将其作为参数，递归调用算法链表中的所有表达式
             spliterator.forEachRemaining(wrappedSink);
             wrappedSink.end();
         }
-        else {
+        else {  // 短路策略
             copyIntoWithCancel(wrappedSink, spliterator);
         }
     }
@@ -522,10 +556,12 @@ abstract class AbstractPipeline<E_IN, E_OUT, S extends BaseStream<E_OUT, S>>
     final <P_IN> void copyIntoWithCancel(Sink<P_IN> wrappedSink, Spliterator<P_IN> spliterator) {
         @SuppressWarnings({"rawtypes","unchecked"})
         AbstractPipeline p = AbstractPipeline.this;
-        while (p.depth > 0) {
+        while (p.depth > 0) {   // 遍历获取管道流链表第一个节点
             p = p.previousStage;
         }
         wrappedSink.begin(spliterator.getExactSizeIfKnown());
+        // 遍历流中每个元素，将其作为参数，递归调用算法链表中的所有表达式。不过，当条件满足
+        // 时|sink.cancellationRequested()返回true|，应立即停止遍历
         p.forEachWithCancel(spliterator, wrappedSink);
         wrappedSink.end();
     }
@@ -539,11 +575,16 @@ abstract class AbstractPipeline<E_IN, E_OUT, S extends BaseStream<E_OUT, S>>
         return StreamOpFlag.ORDERED.isKnown(combinedFlags);
     }
 
+    // 构建算法链表：从流的终结运算对象的|makeSink()|创建的算法节点开始，逆向新增每个表达式对应的算法节点
     @Override
     @SuppressWarnings("unchecked")
     final <P_IN> Sink<P_IN> wrapSink(Sink<E_OUT> sink) {
         Objects.requireNonNull(sink);
-
+        // 从管道流链表尾部节点向前遍历，直到起始管道流，构建一个|Sink.ChainedReference|算法链表，该算法链表的每个槽的数据、表达式都来源于
+        // 管道流链表"同位置"的节点
+        // 注：管道流链表遍历是反向的，当遍历到起始管道流后，构建算法链表也就完成了，若从该算法链表头节点向后遍历，表达式的计算顺序也将和流链式
+        // 调用是一致的
+        // 注：|rawtypes|参数，告诉编译器不用提示使用基本类型参数时相关的警告信息
         for ( @SuppressWarnings("rawtypes") AbstractPipeline p=AbstractPipeline.this; p.depth > 0; p=p.previousStage) {
             sink = p.opWrapSink(p.previousStage.combinedFlags, sink);
         }

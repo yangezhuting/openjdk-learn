@@ -52,6 +52,7 @@ final class DistinctOps {
      * @return the new stream
      */
     static <T> ReferencePipeline<T, T> makeRef(AbstractPipeline<?, T, ?> upstream) {
+        // 流的元素去重是一个有状态行为：需要保存已经遍历过的数据
         return new ReferencePipeline.StatefulOp<T, T>(upstream, StreamShape.REFERENCE,
                                                       StreamOpFlag.IS_DISTINCT | StreamOpFlag.NOT_SIZED) {
 
@@ -119,9 +120,9 @@ final class DistinctOps {
             Sink<T> opWrapSink(int flags, Sink<T> sink) {
                 Objects.requireNonNull(sink);
 
-                if (StreamOpFlag.DISTINCT.isKnown(flags)) {
+                if (StreamOpFlag.DISTINCT.isKnown(flags)) { // 数据已经去重
                     return sink;
-                } else if (StreamOpFlag.SORTED.isKnown(flags)) {
+                } else if (StreamOpFlag.SORTED.isKnown(flags)) {    // 数据有序，仅需保存前一个遍历数据，即可完成去重
                     return new Sink.ChainedReference<T, T>(sink) {
                         boolean seenNull;
                         T lastSeen;
@@ -152,7 +153,7 @@ final class DistinctOps {
                             }
                         }
                     };
-                } else {
+                } else {    // 数据无序，需保存已遍历的所有数据，才可完成去重
                     return new Sink.ChainedReference<T, T>(sink) {
                         Set<T> seen;
 
