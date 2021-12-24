@@ -316,9 +316,15 @@ import java.util.*;
  * @since 1.5
  * @author Doug Lea
  */
-// 底层线程池实现
-// 亮点：每个工作线程Worker对象使用一个|state|来表示线程忙闲状态；使用中断机制控制工作线程/线程池
-// 的退出；使用阻塞队列的|poll()|限时接口，实现工作线程最大空闲时间限制的特性
+// 线程池底层实现
+// 亮点：使用中断机制控制工作线程/线程池的退出；使用阻塞队列的|poll()|限时接口，实现工作线程最大空闲
+// 时间限制的特性
+// 亮点：线程池中的工作线程|Worker|的忙闲状态底层使用|AQS|实现，其中资源字段|AQS.state|被用作表示
+// 忙闲状态。|state==-1|表示不可用，此时线程不能被执行及中断；|state==0|表示空闲，此时线程可被执行
+// 及中断；|state==1|表示忙碌，此时线程正在被执行，并不可被中断（除非线程池被强制退出）
+// 注：我们知道|AQS|是一个多线程访问共享资源的同步器框架，它主要被用来实现：互斥锁、信号量、闭锁等同步
+// 工具。似乎和工作线程并没什么关系！其实|AQS|完全可以理解为：资源的管理器，当资源发生变更，相关线程的
+// 阻塞、唤醒被自动执行。而此处，工作线程|Worker|就将忙闲当作一个独占资源被管理
 public class ThreadPoolExecutor extends AbstractExecutorService {
     /**
      * The main pool control state, ctl, is an atomic integer packing
@@ -630,8 +636,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
          * @param firstTask the first task (null if none)
          */
         Worker(Runnable firstTask) {
-            // 禁止在任务执行前对该线程进行中断，因为|lock()|方法是根据|state|是否为0来进行锁定线程的
-            // 注：设置工作线程状态。为0时，表明线程是空闲的，此时的线程可被中断
+            // 将当前工作线程的"资源"设置为不可用，这可以禁止任务在初始化时被执行、或被中断
+            // 注：工作线程在执行、中断前，都会尝试被"锁定"。而资源不可用时，将不能被锁定
             setState(-1); // inhibit interrupts until runWorker
             this.firstTask = firstTask;
             this.thread = getThreadFactory().newThread(this);
@@ -665,6 +671,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
             return true;
         }
 
+        // 独占获取、释放资源
+        // 注：独占方式，是因为此处资源被用作工作线程的忙闲状态
         public void lock()        { acquire(1); }
         public boolean tryLock()  { return tryAcquire(1); }
         public void unlock()      { release(1); }
@@ -672,7 +680,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
 
         void interruptIfStarted() {
             Thread t;
-            // 线程刚创建，还未启动时，状态会被设置为-1，此时不允许中断。其他无论空闲、忙碌，都将被中断
+            // 线程刚创建，还未启动时，资源不可用（|state==-1|），此时不允许被中断。其他无论空闲、忙碌，都将被中断
             if (getState() >= 0 && (t = thread) != null && !t.isInterrupted()) {
                 try {
                     t.interrupt();
@@ -1248,9 +1256,10 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         try {
             // task不为null情况是初始化worker时，如果task为null，则从阻塞队列中获取任务
             while (task != null || (task = getTask()) != null) {
-                // 锁定工作线程状态，标识为"非空闲"的线程。即，当任务运行时，不允许被线程池其他线程中断
+                // 独占锁定工作线程状态，标识为"非空闲"的线程。即，当任务运行时，不允许被线程池其他线程中断
                 // 注：当一个工作线程获取到一个任务，准备执行时，会先锁定起来，表示他不是一个空闲的工作线程
                 // 注：当任一工作线程退出时，总是会尝试中断另一个空闲的工作线程，以回收更多的工作线程。即链式回收所有线程
+                // 注：独占锁定，代表一个忙碌线程无需被重复启动
                 w.lock();
                 // If pool is stopping, ensure thread is interrupted;
                 // if not, ensure thread is not interrupted.  This
@@ -1283,7 +1292,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                     // 运行过的task标null
                     task = null;
                     w.completedTasks++;
-                    // 释放工作线程状态，使线程可中断
+                    // 释放工作线程，使线程可中断
                     w.unlock();
                 }
             }

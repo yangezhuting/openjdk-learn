@@ -208,6 +208,8 @@ public final class Collectors {
      * @return a {@code Collector} which collects all the input elements into a
      * {@code Collection}, in encounter order
      */
+    // 构建带有指定集合创建工厂的集合收集器。数据将被收集到|collectionFactory|创建的集合中
+    // 注：该方法通常被用于流框架中，作为|collect()|的参数，将流中的元素收集到集合中
     public static <T, C extends Collection<T>>
     Collector<T, ?, C> toCollection(Supplier<C> collectionFactory) {
         return new CollectorImpl<>(collectionFactory, Collection<T>::add,
@@ -225,6 +227,8 @@ public final class Collectors {
      * @return a {@code Collector} which collects all the input elements into a
      * {@code List}, in encounter order
      */
+    // 构建一个线性列表的集合收集器。数据将被收集到|ArrayList|
+    // 注：该方法通常被用于流框架中，作为|collect()|的参数，将流中的元素收集到集合中
     public static <T>
     Collector<T, ?, List<T>> toList() {
         return new CollectorImpl<>((Supplier<List<T>>) ArrayList::new, List::add,
@@ -246,6 +250,8 @@ public final class Collectors {
      * @return a {@code Collector} which collects all the input elements into a
      * {@code Set}
      */
+    // 构建一个集的集合收集器。数据将被收集到|HashSet|
+    // 注：该方法通常被用于流框架中，作为|collect()|的参数，将流中的元素收集到集合中
     public static <T>
     Collector<T, ?, Set<T>> toSet() {
         return new CollectorImpl<>((Supplier<Set<T>>) HashSet::new, Set::add,

@@ -788,6 +788,10 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      *                    compatible with the accumulator function
      * @return the result of the reduction
      */
+    // 收集器。遍历分割器中每个元素，使用|accumulator|方法将它们添加到一个使用|supplier|方法创建
+    // 的集合中，并返回。  |combiner|在并行流中，用于归并集合
+    // 注：|supplier|中泛型|R|与列表类型一致，比如|supplier=ArrayList::new|时，类型为|List|；
+    // |accumulator|中泛型|T|与当前流中的元素类型一致，或是它的超类，这可用于将元素添加到集合中
     <R> R collect(Supplier<R> supplier,
                   BiConsumer<R, ? super T> accumulator,
                   BiConsumer<R, R> combiner);
@@ -844,6 +848,8 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      * @see #collect(Supplier, BiConsumer, BiConsumer)
      * @see Collectors
      */
+    // 封装版的收集器。将前面多参数版本的收集器|collect()|的参数封装到一个对象中
+    // 注：大多数场景中，参数|collector|推荐使用辅助类|Collectors|来构建，相当便捷
     <R, A> R collect(Collector<? super T, A, R> collector);
 
     /**
