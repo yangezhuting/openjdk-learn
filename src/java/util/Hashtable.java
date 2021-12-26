@@ -183,11 +183,12 @@ public class Hashtable<K,V>
                                                initialCapacity);
         if (loadFactor <= 0 || Float.isNaN(loadFactor))
             throw new IllegalArgumentException("Illegal Load: "+loadFactor);
-
+        // 如果初始值是 0  的话，会默认改为1，为了防止是个空桶
         if (initialCapacity==0)
             initialCapacity = 1;
         this.loadFactor = loadFactor;
         table = new Entry<?,?>[initialCapacity];
+        // HashTable 的 初始阈值是 容量的 0.75 倍
         threshold = (int)Math.min(initialCapacity * loadFactor, MAX_ARRAY_SIZE + 1);
     }
 
@@ -207,6 +208,7 @@ public class Hashtable<K,V>
      * Constructs a new, empty hashtable with a default initial capacity (11)
      * and load factor (0.75).
      */
+    // 默认大小是 11
     public Hashtable() {
         this(11, 0.75f);
     }
@@ -220,6 +222,7 @@ public class Hashtable<K,V>
      * @throws NullPointerException if the specified map is null.
      * @since   1.2
      */
+    // 在 两倍扩容大小 | 11默认大小中取最大值。
     public Hashtable(Map<? extends K, ? extends V> t) {
         this(Math.max(2*t.size(), 11), 0.75f);
         putAll(t);
@@ -386,12 +389,13 @@ public class Hashtable<K,V>
      * and load factor.
      */
     @SuppressWarnings("unchecked")
+    // 扩容每次都是 2*old + 1
     protected void rehash() {
         int oldCapacity = table.length;
         Entry<?,?>[] oldMap = table;
 
         // overflow-conscious code
-        int newCapacity = (oldCapacity << 1) + 1;
+        int newCapacity = (oldCapacity << 1) + 1; // 扩容大小
         if (newCapacity - MAX_ARRAY_SIZE > 0) {
             if (oldCapacity == MAX_ARRAY_SIZE)
                 // Keep running with MAX_ARRAY_SIZE buckets
@@ -420,11 +424,13 @@ public class Hashtable<K,V>
         modCount++;
 
         Entry<?,?> tab[] = table;
+        // 大于阈值会触发扩容
         if (count >= threshold) {
             // Rehash the table if the threshold is exceeded
             rehash();
 
             tab = table;
+            // 直接获取的对象的 hash 值
             hash = key.hashCode();
             index = (hash & 0x7FFFFFFF) % tab.length;
         }
@@ -453,6 +459,7 @@ public class Hashtable<K,V>
      * @see     Object#equals(Object)
      * @see     #get(Object)
      */
+    // 是同步锁，线程是安全的
     public synchronized V put(K key, V value) {
         // Make sure the value is not null
         if (value == null) {
@@ -462,6 +469,9 @@ public class Hashtable<K,V>
         // Makes sure the key is not already in the hashtable.
         Entry<?,?> tab[] = table;
         int hash = key.hashCode();
+        // 这里是 取 模拿到数组的下标，
+        // 和hashmap 用的 e.hash & (newCap - 1) 是有区别的
+        // 因为hashmap 是两倍扩容，容量是2的倍数，所以不需要再模除容器的大小。
         int index = (hash & 0x7FFFFFFF) % tab.length;
         @SuppressWarnings("unchecked")
         Entry<K,V> entry = (Entry<K,V>)tab[index];
@@ -1232,6 +1242,7 @@ public class Hashtable<K,V>
     /**
      * Hashtable bucket collision list entry
      */
+    // hash 链表
     private static class Entry<K,V> implements Map.Entry<K,V> {
         final int hash;
         final K key;
